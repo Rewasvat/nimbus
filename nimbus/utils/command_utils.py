@@ -829,21 +829,3 @@ class DynamicGroup(click.Group):
         for var_name in supported_values:
             if var_name in config:
                 setattr(self, var_name, config[var_name])
-
-
-def game_object(name):
-    """Click type-converter method to define a command argument/option type as a Game object."""
-    from maestro.games.manager import GameManager
-    manager = GameManager()
-    game = manager.get_game(name)
-    if game is None:
-        click.secho(f"Game Object for command: Invalid game name '{name}'", fg="red")
-        return
-    return game
-
-
-def group_object(name):
-    """Click type-converter method to define a command argument/option type as a GameGroup object."""
-    from maestro.games.manager import GameManager
-    manager = GameManager()
-    return manager.get_group(name)
