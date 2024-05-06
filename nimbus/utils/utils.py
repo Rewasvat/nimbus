@@ -6,6 +6,8 @@ import copy
 import glob
 import click
 import importlib
+import traceback
+import subprocess
 from collections import namedtuple
 from contextlib import contextmanager
 
@@ -64,12 +66,12 @@ def check_dict(dA, nameA, dB, nameB):
             bal = dB[key]
             check_value(val, f"{nameA}[{key}]", bal, f"{nameB}[{key}]")
         else:
-            click.secho(f"Mismatch: Key {key} from {nameA} not in {nameB}")
+            click.secho(f"Mismatch: Key {key} (='{dA[key]}') from {nameA} not in {nameB}")
     for key, bal in dB.items():
         if key in checked_items:
             continue
         # key definately isn't on A
-        click.secho(f"Mismatch: Key {key} from {nameB} not in {nameA}")
+        click.secho(f"Mismatch: Key {key} (='{dB[key]}') from {nameB} not in {nameA}")
 
 
 def str_to_bool(text):
@@ -158,17 +160,121 @@ def load_all_modules(modules_path: str, import_path: str = None, ignore_paths=[]
     return modules
 
 
+def convert_to_table(value) -> any | list | 'Table':
+    """Converts the given value to a Table, if possible.
+    For lists, this converts the items."""
+    if isinstance(value, dict) and not isinstance(value, Table):
+        return Table(**value)
+    elif isinstance(value, list):
+        return [convert_to_table(item) for item in value]
+    return value
+
+
 class Table(dict):
-    """A python dict with Lua Table-like functionalities"""
+    """Python Dict subclass to have behavior similar to Lua Tables.
 
-    def get(self, key, default=None):
-        value = super().get(key, default)
-        if isinstance(value, dict):
-            return Table(**value)
-        return value
+    Notably, values can be accessed as attributes `obj.x` besides as regular dict itens `obj["x"]`.
+    These tables are still python dicts so they behave exactly like dicts with extra table-like features.
+    """
 
-    def __getattr__(self, name: str):
-        return self.get(name)
+    def __getattr__(self, key: str):
+        # No use of 'self.' here to prevent infinite-recursion of getting attributes
+        value = super().get(key, None)
+        return convert_to_table(value)
 
     def __setattr__(self, key: str, value):
         self[key] = value
+
+    def get(self, key, default=None):
+        value = super().get(key, default)
+        return convert_to_table(value)
+
+    # These get/setstate operators are required to make pickling work properly when the object has a
+    # modified getattr op, that may return None
+    def __getstate__(self):
+        return vars(self)
+
+    def __setstate__(self, d):
+        vars(self).update(d)
+
+
+def convert_data_table(data: dict[str, str], model: dict[str, type]):
+    """Converts a str-only DATA table to a properly typed table, following the definitions in MODEL.
+
+    MODEL is a `key -> type()` dict that defines the type for each key in DATA.
+    The `type()` value should be a type/function that receives a string and converts it to the expected type, or raises an exception if
+    conversion fails (such as `int`, `float`, `bool`).
+
+    Only the DATA keys defined in MODEL are converted, any other existing keys are maintained in their original string values. As such,
+    MODEL may only define the non-string types to convert.
+
+    This returns a Table with the properly typed values. However if any conversion fails, this will return None.
+    """
+    obj = Table(**copy.deepcopy(data))
+    for attribute_name, type in model.items():
+        value = obj.get(attribute_name)
+        try:
+            obj[attribute_name] = type(value)
+        except Exception:
+            click.secho(f"Error while converting attribute '{attribute_name}' (value '{value}') from Data Table: {traceback.format_exc()}", fg="red")
+            return
+    return obj
+
+
+def update_and_sum_dicts(d1: dict[str, list], d2: dict[str, list]) -> dict[str, list]:
+    """Updates D1 with D2, but summing up values that exist in both dicts.
+
+    Returns D1.
+    """
+    for key, values in d2.items():
+        if key not in d1:
+            d1[key] = values
+        else:
+            d1[key] += values
+    return d1
+
+
+def is_admin_user(no_prints=False) -> bool:
+    """Checks if we're running as an admin/sudo user.
+
+    Returns a boolean indicating if current running user has admin/sudo privileges.
+    Otherwise, returns None when user privilege state can't be determined and prints message
+    to console indicating it (this can be disabled by passing the NO_PRINTS flag)."""
+    import ctypes
+    try:
+        # This should work on Unix (maybe Macs too?)
+        return os.getuid() == 0
+    except Exception:
+        pass
+    try:
+        # This should work on Windows
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        pass
+    if not no_prints:
+        click.secho("Could not determine if we're running as an admin/sudo user.", fg="red")
+    return None
+
+
+def get_connected_device_ip():
+    """Gets a connected Android device IP using ADB.
+
+    This gets the IP address of a connected Android device in your local (wireless) network.
+
+    Returns:
+        str: the IP address of the connected Android device, or None if the IP couldn't be found.
+        In failure cases, a message is printed to the output.
+    """
+    try:
+        cmd = ["adb", "shell", "ip", "-f", "inet", "-br", "a", "show", "wlan0"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        parts = result.stdout.split()
+        ip = parts[-1].split("/")[0]
+        return ip
+    except subprocess.CalledProcessError as e:
+        click.secho(f"[ADB] failed with code {e.returncode}: {e.stderr + e.stdout}", fg="red")
+    except FileNotFoundError as e:
+        click.secho("[ADB] Couldn't find Android ADB tool", fg="red")
+    except Exception as e:
+        click.secho(f"[ADB] Unexpected error ({type(e)}): {e}", fg="red")
+    return None

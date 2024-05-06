@@ -1,7 +1,9 @@
 import os
 import pickle
 import keyring
+import platform
 from nimbus.utils.command_utils import Singleton
+from typing import Callable
 
 
 class DataCache(metaclass=Singleton):
@@ -11,6 +13,7 @@ class DataCache(metaclass=Singleton):
     def __init__(self):
         self.data: dict[str, any] = None
         self.service_id = "NimbusTool"
+        self.shutdown_listeners: list[Callable[[], None]] = []
         self.data_path = ""  # Initialized in 'set_cache_path'
         self.set_cache_path(os.path.expanduser("~"))
 
@@ -71,19 +74,60 @@ class DataCache(metaclass=Singleton):
         get/set_data)."""
         user_key = f"nimbus_{key}"
 
-        if password is not None:
-            # If password value is something, save it (possibly overwriting previous value).
+        if password is None:
+            self.delete_password(key)
+        elif platform.system() == "Windows" and len(password) > 1200:
+            # Windows Keyring implementation has a issue saving passwords longer than 1280 characters.
+            # Something like `win32ctypes.pywin32.pywintypes.error: (1783, 'CredWrite', 'O fragmento de código recebeu dados incorretos')`
+            # So we have a workaround here: if in windows, and the password is long, we split it into smaller chunks.
+            chunks = [password[i:i+1000] for i in range(0, len(password), 1000)]
+            keyring.set_password(self.service_id, f"{user_key}_chunk0", str(len(chunks)))
+            for i, chunk in enumerate(chunks):
+                chunk_key = f"{user_key}_chunk{i+1}"
+                keyring.set_password(self.service_id, chunk_key, chunk)
+        else:
             keyring.set_password(self.service_id, user_key, password)
-        elif self.get_password(key) is not None:
-            # If password value is None, but the stored value is something, delete it instead.
-            keyring.delete_password(self.service_id, user_key)
+
+    def delete_password(self, key):
+        """Deletes a saved password from the system's encrypted keyring service, that was previously saved with 'set_password'."""
+        if self.get_password(key) is not None:
+            user_key = f"nimbus_{key}"
+            base_chunk_key = f"{user_key}_chunk0"
+            num_chunks = keyring.get_password(self.service_id, base_chunk_key)
+            if num_chunks is not None:
+                for i in range(int(num_chunks)):
+                    chunk_key = f"{user_key}_chunk{i+1}"
+                    keyring.delete_password(self.service_id, chunk_key)
+                keyring.delete_password(self.service_id, base_chunk_key)
+            else:
+                keyring.delete_password(self.service_id, user_key)
 
     def get_password(self, key):
         """Gets a value ("password") from the system's encrypted keyring service, that was saved with 'set_password'."""
         user_key = f"nimbus_{key}"
+
+        num_chunks = keyring.get_password(self.service_id, f"{user_key}_chunk0")
+        if num_chunks is not None:
+            num_chunks = int(num_chunks)
+            chunks = []
+            for i in range(num_chunks):
+                chunk_key = f"{user_key}_chunk{i+1}"
+                chunk = keyring.get_password(self.service_id, chunk_key)
+                chunks.append(chunk)
+            return "".join(chunks)
+
         return keyring.get_password(self.service_id, user_key)
 
     def shutdown(self):
-        """Performs any actions necessary to release resources and shutdown this DataCache instance.
-        Usually this is called by Nimbus before closing, after executing any commands."""
-        pass
+        """Performs any actions necessary to release resources and shutdown this MaestroState instance.
+        Usually this is called by Maestro before closing, after executing any commands."""
+        for listener in self.shutdown_listeners:
+            listener()
+
+    def add_shutdown_listener(self, listener: Callable[[], None]):
+        """Registers the given callable to be called when Maestro is shut down.
+
+        This method may be used as a decorator.
+        """
+        self.shutdown_listeners.append(listener)
+        return listener

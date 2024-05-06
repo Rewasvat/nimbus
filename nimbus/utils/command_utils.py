@@ -379,7 +379,7 @@ def support_batch_commands(enable=True):
     def decorator(cls):
         if not hasattr(cls, "_class_commands_config"):
             cls._class_commands_config = {}
-        cls._class_commands_config["allow_batch_commands"] = True
+        cls._class_commands_config["allow_batch_commands"] = enable
         return cls
     return decorator
 
@@ -440,6 +440,34 @@ def verbose_command_group(verbose=True):
     return decorator
 
 
+def invoke_without_command(enable=True):
+    """Class-decorator to enable/disable invoking this class without a command.
+
+    This is the same as defining the `invoke_without_command` attribute on a click.Group, allowing the group
+    to be executed without passing on a command.
+
+    This can be defined on each class (via this decorator) in a class hierarchy to change the value as needed,
+    or it can be defined in the object instance itself as the following attribute:
+    ```python
+    instance._commands_config = {
+        "invoke_without_command": True,
+        "no_args_is_help": False,
+
+    }
+    ```
+    The top-most value will be used, so: Instance -> Class -> ParentClass -> Grandparent...
+    """
+    def decorator(cls):
+        if not hasattr(cls, "_class_commands_config"):
+            cls._class_commands_config = {}
+        # Esses 2 atributos (invoke_without_command e no_args_is_help) precisam ser definidos assim pra funcionar
+        # É como o click faz na inicialização da classe base do Group
+        cls._class_commands_config["invoke_without_command"] = enable
+        cls._class_commands_config["no_args_is_help"] = not enable
+        return cls
+    return decorator
+
+
 class DynamicGroup(click.Group):
     """Specialized click.Group class to define a hierarchy of CLI commands (from Click) based
     on instance-methods of a generic class.
@@ -458,13 +486,17 @@ class DynamicGroup(click.Group):
     is initialized, thus allowing for CLI-specific initialization logic to be executed.
     """
 
-    def __init__(self, obj, name=None, **attrs):
-        """OBJ: the object to be wrapped as a click.Group. This can be None in order to setup a lazy-loading OBJ.
+    def __init__(self, obj, name=None, obj_type=None, **attrs):
+        """* OBJ: the object to be wrapped as a click.Group. This can be None in order to setup a lazy-loading OBJ.
         To do that, this class needs to be derived and the `self.create_object` method needs to be properly implemented.
 
-        NAME is the optional name of this group in the CLI. This is the name used to call it in the CLI.
+        * NAME is the optional name of this group in the CLI. This is the name used to call it in the CLI.
         If undefined, a `@object_identifier` method will be searched and executed to get the name. Otherwise,
         if no `@object_identifier` methods exist, then a error will occur since commands need to be named.
+
+        * OBJ_TYPE is the optional type of the object to be wrapped. This is used if OBJ is not defined (None) as a way
+        to instantiate (without arguments) the object when it is needed, thus allowing lazy-loading the object without
+        requiring to create a derived class of DynamicGroup and overwriting the `create_object` method.
         """
         ######
         self.allow_mro_command_check = False
@@ -479,7 +511,10 @@ class DynamicGroup(click.Group):
         """
 
         if "help" not in attrs:
-            attrs["help"] = obj.__class__.__doc__
+            if obj is not None:
+                attrs["help"] = obj.__class__.__doc__
+            elif obj_type is not None:
+                attrs["help"] = obj_type.__doc__
 
         if name is None:
             self.obj = obj
@@ -502,7 +537,10 @@ class DynamicGroup(click.Group):
         self.allow_batch_commands = False
         self.custom_batch_name_expander = None
         if obj is not None:
+            self.obj_type = type(obj)
             self.read_config_from_object()
+        else:
+            self.obj_type = obj_type
 
     def log(self, msg, fg="white"):
         """Utility method to log a message from this group into the output via click.secho.
@@ -620,6 +658,8 @@ class DynamicGroup(click.Group):
         The default implementation (from DynamicGroup) does and returns nothing. Therefore to implement lazy-loading, this method
         should be overriden, usually through deriving this class and re-implementing this method.
         """
+        if self.obj_type is not None:
+            return self.obj_type()
         return
 
     def create_sub_group(self, obj, command_name: str = None):
@@ -785,7 +825,25 @@ class DynamicGroup(click.Group):
         obj_config = self.obj._commands_config if hasattr(self.obj, "_commands_config") else {}
         config.update(obj_config)
 
-        supported_values = ["allow_mro_command_check", "verbose", "allow_batch_commands"]
+        supported_values = ["allow_mro_command_check", "verbose", "allow_batch_commands", "invoke_without_command", "no_args_is_help"]
         for var_name in supported_values:
             if var_name in config:
                 setattr(self, var_name, config[var_name])
+
+
+def game_object(name):
+    """Click type-converter method to define a command argument/option type as a Game object."""
+    from maestro.games.manager import GameManager
+    manager = GameManager()
+    game = manager.get_game(name)
+    if game is None:
+        click.secho(f"Game Object for command: Invalid game name '{name}'", fg="red")
+        return
+    return game
+
+
+def group_object(name):
+    """Click type-converter method to define a command argument/option type as a GameGroup object."""
+    from maestro.games.manager import GameManager
+    manager = GameManager()
+    return manager.get_group(name)
