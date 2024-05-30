@@ -121,6 +121,7 @@ class DataCache(metaclass=Singleton):
     def shutdown(self):
         """Performs any actions necessary to release resources and shutdown this MaestroState instance.
         Usually this is called by Maestro before closing, after executing any commands."""
+        self.save_data()
         for listener in self.shutdown_listeners:
             listener()
 
@@ -131,3 +132,6 @@ class DataCache(metaclass=Singleton):
         """
         self.shutdown_listeners.append(listener)
         return listener
+
+    # TODO: seria interessante ter uma forma, automatica se possivel, de fazer um backup dos dados salvos.
+    #   - ja teve caso que deu erro na escrita enqto codava coisa, e ai o cache inteiro ficou corrompido.

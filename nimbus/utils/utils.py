@@ -31,10 +31,10 @@ def check_value(vA, nameA, vB, nameB):
     The `nameA` and `nameB` params respectively identify the vA and vB values for printing.
 
     If values are dicts or lists, this will check the items recursively."""
-    if type(vA) == type(vB):
-        if type(vA) == dict:
+    if type(vA) is type(vB):
+        if type(vA) is dict:
             check_dict(vA, nameA, vB, nameB)
-        elif type(vA) == list:
+        elif isinstance(vA, list):
             check_list(vA, nameA, vB, nameB)
         elif vA != vB:
             click.secho(f"Mismatch: {nameA}={vA} != {vB}={nameB}")
@@ -85,7 +85,7 @@ def str_to_bool(text):
     * True: `true`, `truthy`, `yes`, `y`
     * False: `false`, `falsy`, `no`, `n`, `none`
     """
-    if type(text) == bool:
+    if isinstance(text, bool):
         return text
 
     text = text.lower()
@@ -160,16 +160,6 @@ def load_all_modules(modules_path: str, import_path: str = None, ignore_paths=[]
     return modules
 
 
-def convert_to_table(value) -> any | list | 'Table':
-    """Converts the given value to a Table, if possible.
-    For lists, this converts the items."""
-    if isinstance(value, dict) and not isinstance(value, Table):
-        return Table(**value)
-    elif isinstance(value, list):
-        return [convert_to_table(item) for item in value]
-    return value
-
-
 class Table(dict):
     """Python Dict subclass to have behavior similar to Lua Tables.
 
@@ -196,6 +186,16 @@ class Table(dict):
 
     def __setstate__(self, d):
         vars(self).update(d)
+
+
+def convert_to_table(value) -> list | Table:
+    """Converts the given value to a Table, if possible.
+    For lists, this converts the items."""
+    if isinstance(value, dict) and not isinstance(value, Table):
+        return Table(**value)
+    elif isinstance(value, list):
+        return [convert_to_table(item) for item in value]
+    return value
 
 
 def convert_data_table(data: dict[str, str], model: dict[str, type]):
@@ -273,7 +273,7 @@ def get_connected_device_ip():
         return ip
     except subprocess.CalledProcessError as e:
         click.secho(f"[ADB] failed with code {e.returncode}: {e.stderr + e.stdout}", fg="red")
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         click.secho("[ADB] Couldn't find Android ADB tool", fg="red")
     except Exception as e:
         click.secho(f"[ADB] Unexpected error ({type(e)}): {e}", fg="red")

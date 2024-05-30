@@ -183,8 +183,9 @@ class Source:
 
     def copy(self, backup_path: str):
         """TODO"""
-        os.makedirs(targetPath, exist_ok=True)
-        shutil.copyfile(path, targetFilepath)
+        # os.makedirs(targetPath, exist_ok=True)
+        # shutil.copyfile(path, targetFilepath)
+        pass
 
     def restore(self, backup_path: str):
         """TODO"""

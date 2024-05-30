@@ -24,8 +24,6 @@ class NimbusCommands:
             "nimbus",
             "data",
             "utils",
-            "games",  # TODO REMOVEME
-            "pipes",  # TODO REMOVEME
         ]
         utils.load_all_modules(os.path.dirname(__file__), "nimbus", ignore_paths=ignore_paths)
         self.command_objects = [cls() for cls in cmd_utils._main_commands]
