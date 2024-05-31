@@ -13,8 +13,8 @@ class CanvasSlot(Slot):
 
     def __init__(self, parent: ContainerWidget, name: str):
         super().__init__(parent, name)
-        self.position = (0, 0)
-        self.size = parent.slot.area.size * 0.5
+        self.pos_ratio: imgui_utils.Vector2 = imgui_utils.Vector2()
+        self.size_ratio: imgui_utils.Vector2 = imgui_utils.Vector2(0.5, 0.5)
 
     @imgui_utils.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
@@ -25,37 +25,23 @@ class CanvasSlot(Slot):
     def name(self, value):
         self._name = value
 
-    @imgui_utils.vector2_property(flags=imgui.SliderFlags_.always_clamp)
+    @imgui_utils.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
     def position(self) -> imgui_utils.Vector2:
-        """The position of the slot, in local coords. [GET/SET]"""
-        return self.area.position - self.parent.position
+        """The position of the slot, as a ratio of the canvas's size. [GET/SET]"""
+        return self.pos_ratio
 
     @position.setter
     def position(self, value: imgui_utils.Vector2):
-        self.area.position = self.parent.position + value
+        self.pos_ratio = value
 
-    @imgui_utils.vector2_property(flags=imgui.SliderFlags_.always_clamp)
+    @imgui_utils.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
     def size(self) -> imgui_utils.Vector2:
-        """The size of the slot. [GET/SET]"""
-        return self.area.size
+        """The size of the slot, as a ratio of the canvas's size. [GET/SET]"""
+        return self.size_ratio
 
     @size.setter
     def size(self, value: imgui_utils.Vector2):
-        self.area.size = value
-
-    def _update_position_editor(self, editor: imgui_utils.Vector2Editor):
-        """Method automatically called by our ``position`` Vector2-property editor in order to dynamically
-        update its settings before editing."""
-        size = self.parent.slot.area.size
-        editor.x_range = (0, size.x)
-        editor.y_range = (0, size.y)
-
-    def _update_size_editor(self, editor: imgui_utils.Vector2Editor):
-        """Method automatically called by our ``size`` Vector2-property editor in order to dynamically
-        update its settings before editing."""
-        size = self.parent.slot.area.size
-        editor.x_range = (0, size.x)
-        editor.y_range = (0, size.y)
+        self.size_ratio = value
 
 
 class Canvas(ContainerWidget):
@@ -69,5 +55,6 @@ class Canvas(ContainerWidget):
         self._slot_class = CanvasSlot
 
     def update_slots(self):
-        # Do not update slots since we let user select their area.
-        pass
+        for slot in self._slots:
+            slot.area.position = self.position + self.area * slot.pos_ratio
+            slot.area.size = self.area * slot.size_ratio

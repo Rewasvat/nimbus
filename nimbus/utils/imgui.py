@@ -744,7 +744,6 @@ class Rectangle:
 # ============== Base Widgets (generic for any theme?)
 # TODO: suportar drag&drop pra mover widgets? simple (ou base) widgets seriam objetos moviveis, enquanto
 #   os "slots" pra filhos nos container widgets seriam os possiveis alvos pra drop.
-#   - talvez permitir widgets sem pais ficarem flutuando? isso era algo que o fabio meio que queria...
 # TODO: suportar "temas" somehow? Daria pra ser só os temas da imgui? <ver Elbow>
 
 # ============== Sensor-enabled Widgets (tb genericas, mas separadas das widgets normais caso queira usar elas num app sem sensors)
