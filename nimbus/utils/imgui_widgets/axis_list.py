@@ -101,7 +101,7 @@ class AxisList(ContainerWidget):
         return [slot.slice for slot in self._slots]
 
     def update_slots(self):
-        current_slots: list[AxisListSlot] = self._slots.copy()
+        current_slots: list[AxisListSlot] = self._slots
 
         total_slices_size = sum(self.slices)
 

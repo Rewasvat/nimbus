@@ -9,6 +9,7 @@ from nimbus.utils.imgui_widgets.base import BaseWidget, LeafWidget, ContainerWid
 from nimbus.utils.imgui_widgets.board import Board
 from nimbus.utils.imgui_widgets.axis_list import AxisList
 from nimbus.utils.imgui_widgets.panel import Panel
+from nimbus.utils.imgui_widgets.canvas import Canvas
 
 # Simple (Leaf) Widget Types
 from nimbus.utils.imgui_widgets.rect import Rect

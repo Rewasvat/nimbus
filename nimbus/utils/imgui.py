@@ -1019,7 +1019,7 @@ def bool_property():
 class FloatEditor(ImguiTypeEditor):
     """ImguiTypeEditor for editing a BOOLEAN value."""
 
-    def __init__(self, min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, flags: imgui.SliderFlags_ = imgui.SliderFlags_.none):
+    def __init__(self, min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, flags: imgui.SliderFlags_ = 0):
         """
         Args:
             min (float, optional): Minimum allowed value for this float property. Defaults to 0.0.
@@ -1165,6 +1165,57 @@ def list_property(item_editor: ImguiTypeEditor, default_item=None):
     Behaves the same way as a property, but includes a ListEditor object for allowing changing this list's value in imgui.
     """
     editor = ListEditor(item_editor, default_item)
+    return imgui_property(editor)
+
+
+class Vector2Editor(ImguiTypeEditor):
+    """ImguiTypeEditor for editing a Vector2 value."""
+
+    def __init__(self, x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, flags: imgui.SliderFlags_ = 0):
+        super().__init__()
+        self.speed: float = speed
+        self.format: str = format
+        self.flags = flags
+        self.x_range: Vector2 = x_range
+        self.y_range: Vector2 = y_range
+        self.add_tooltip_after_value = False
+
+    def draw_value_editor(self, obj, name: str, value):
+        if value is None:
+            value = Vector2()
+        imgui.push_id("XComp")
+        x_changed, value.x = self._component_edit(value.x, self.x_range)
+        imgui.set_item_tooltip(f"X component of the Vector2.\n\n{self.attr_doc}")
+        imgui.pop_id()
+        imgui.same_line()
+        imgui.push_id("YComp")
+        y_changed, value.y = self._component_edit(value.y, self.y_range)
+        imgui.set_item_tooltip(f"Y component of the Vector2.\n\n{self.attr_doc}")
+        imgui.pop_id()
+        return x_changed or y_changed, value
+
+    def _component_edit(self, value: float, range: tuple[float, float]):
+        min, max = range
+        if max > min:
+            return imgui.slider_float("##value", value, min, max, self.format, self.flags)
+        else:
+            return imgui.drag_float("##value", value, self.speed, min, max, self.format, self.flags)
+
+
+def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, flags: imgui.SliderFlags_ = 0):
+    """Imgui Property attribute for a Vector2 type.
+
+    Behaves the same way as a property, but includes a Vector2Editor object for allowing changing this Vector2's value in imgui.
+
+    Args:
+        x_range (tuple[float, float], optional): (min, max) range of possible values for the X component of the vector.
+        y_range (tuple[float, float], optional): (min, max) range of possible values for the Y component of the vector.
+        format (str, optional): Text format of the value to decorate the control with. Defaults to "%.3". Apparently this needs to be a valid
+        python format, otherwise the float control wont work properly.
+        speed (float, optional): Speed to apply when changing values. Only applies when dragging the value. Defaults to 1.0.
+        flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
+    """
+    editor = Vector2Editor(x_range=x_range, y_range=y_range, format=format, speed=speed, flags=flags)
     return imgui_property(editor)
 
 

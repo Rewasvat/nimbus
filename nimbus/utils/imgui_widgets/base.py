@@ -301,6 +301,7 @@ class Slot:
         """The area of this slot. It's inside this area, as a imgui ChildRegion, that our child widget will be drawn.
 
         Container widgets usually update this value on all its slots as needed.
+        Area position has to be in absolute coords.
         """
         self.accepted_child_types: list[type[BaseWidget]] = [BaseWidget]
         """The types accepted by this slot as children (subclasses of them are accepted as well). Subclasses of slots should
@@ -442,6 +443,7 @@ class Slot:
         return f"Slot {self._name}"
 
 
+# TODO: render-edit: permitir drag&drop pra mudar ordem dos slots, arrastando eles no menu.
 @not_user_creatable
 class ContainerWidget(BaseWidget):
     """Abstract Base Container Widget.
