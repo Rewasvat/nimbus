@@ -1,6 +1,29 @@
 import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import BaseWidget, ContainerWidget
+from nimbus.utils.imgui_widgets.base import BaseWidget, ContainerWidget, Slot
 from imgui_bundle import imgui, ImVec2
+
+
+class BoardSlot(Slot):
+    """Slot for a Board container.
+
+    Allows user-selection of the board's displayed slot through its name.
+    """
+
+    def __init__(self, parent: ContainerWidget, name: str):
+        super().__init__(parent, name)
+        self.parent: Board = parent  # Just to change the type-hint
+
+    @imgui_utils.string_property(imgui.InputTextFlags_.enter_returns_true)
+    def name(self) -> str:
+        """Name of this slot. User can change this, but it should be unique amongst all slots of this container. [GET/SET]"""
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        was_selected = self.parent.selected_name == self._name
+        self._name = value
+        if was_selected:
+            self.parent.selected_name = value
 
 
 class Board(ContainerWidget):
@@ -14,31 +37,23 @@ class Board(ContainerWidget):
     """
 
     def __init__(self, names: list[str] = None):
-        self._children: dict[str, BaseWidget] = {}
-        """Table of slots this board contains."""
+        self._slot_class = BoardSlot
+        self._slots = [BoardSlot(self, name) for name in (names or ["Default"])]
+        self.slot_counter = len(self._slots)
         self._selected_name: str = None  # will be fixed by the update_slots()
-        """ID of the selected slot (key of ``self.children``)"""
-        self.update_slots(names)
-
-    def get_children(self) -> list[BaseWidget]:
-        return list(self._children.values())
-
-    @imgui_utils.list_property(imgui_utils.StringEditor(), "default")
-    def boards(self):
-        """The list of available boards. Each board is a slot for a child widget that will take up
-        our full available space. However, only a single slot is visible at any one time (see ``selected_name``).
-
-        Updating this list changes the available slots. Note that this might delete child widgets if its slot was removed. [GET/SET]"""
-        return list(self._children.keys())
-
-    @boards.setter
-    def boards(self, value: list[str]):
-        self.update_slots(value)
+        """Name of the selected slot."""
+        self.on_slots_changed()
 
     @property
-    def selected_child(self):
-        """Gets the selected child. Might be none of the slot is empty. [GET]"""
-        return self._children.get(self._selected_name)
+    def boards(self):
+        """The list of available boards. Each board is a slot for a child widget that will take up
+        our full available space. However, only a single slot is visible at any one time (see ``selected_name``). [GET]"""
+        return [slot.name for slot in self._slots]
+
+    @property
+    def selected_slot(self):
+        """Gets the selected slot. [GET]"""
+        return self.get_slot(self._selected_name)
 
     @imgui_utils.enum_property([], flags=imgui.SelectableFlags_.dont_close_popups)
     def selected_name(self) -> str:
@@ -47,85 +62,14 @@ class Board(ContainerWidget):
 
     @selected_name.setter
     def selected_name(self, value: str):
-        if value in self._children:
-            self._selected_name = value
+        for slot in self._slots:
+            slot.enabled = slot._name == value
+        self._selected_name = value
 
-    def update_slots(self, new_names: list[str]):
-        """Updates our slots with the given new names.
-
-        Any name in NEW_NAMES but not in our current names is made to create a new slot.
-        Any namy in our current names but not in NEW_NAMES has its slot deleted.
-        Existing names continue unchanged.
-
-        If the selected slot was removed, it will default to the first in names.
-
-        Args:
-            new_names (list[str]): the list of slot names this board shall have.
-            This will default to ``["Default"]`` if None or empty.
-        """
-        if new_names is None or len(new_names) <= 0:
-            new_names = ["Default"]
-
-        add_names = set(new_names) - set(self.boards)
-        remove_names = set(self.boards) - set(new_names)
-
-        for name in add_names:
-            # No need to calculate slot area since the board's slots always have the full size of the board
-            # However only one of those slots is enabled, so only one will be rendered.
-            self._children[name] = None
-        for name in remove_names:
-            child = self._children.pop(name)  # returns widget that was removed, no need to do anything with it now
-            if child is not None:
-                child.delete()
-
-        if self._selected_name not in self._children:
-            self._selected_name = self.boards[0]
+    def on_slots_changed(self):
+        if self._selected_name not in self.boards:
+            self._selected_name = self.boards[0] if len(self.boards[0]) > 0 else ""
         self.selected_name = self._selected_name  # to update enabled slots.
-
-    def set_child_in_slot(self, child: BaseWidget, name: str):
-        """Sets a child widget in one of our slots.
-
-        If the slot already had a child, it'll be deleted.
-
-        Args:
-            child (BaseWidget): Child widget to set, reparented to us.
-            name (str): Name of the slot (board) to set the child in.
-
-        Returns:
-            bool: if the child was successfully added to the slot.
-        """
-        if name not in self._children:
-            return False
-        prev_child = self._children.get(name)
-        if prev_child is not None:
-            prev_child.delete()
-        self._children[name] = child
-        self.system.register_widget(child)
-        child.reparent_to(self)
-        return True
-
-    def remove_child(self, child: BaseWidget):
-        if super().remove_child(child):
-            for name, slot_child in self._children.items():
-                if slot_child == child:
-                    self._children[name] = None
-                    return True
-        return False
-
-    def render(self):
-        self._handle_interaction()
-        self._draw_selected_child()
-
-    def _draw_selected_child(self, slot_pos: ImVec2 = None, slot_size: ImVec2 = None):
-        """Renders the currently selected child widget of this board.
-
-        Args:
-            slot_pos (ImVec2, optional): Position of the slot (top-left corner), in local units. Defaults to (0,0).
-            slot_size (ImVec2, optional): Size of the slot. Defaults to ``imgui.get_content_region_avail()``, which is all available space.
-        """
-        new_child = self._render_child(self.selected_child, slot_pos=slot_pos, slot_size=slot_size, name=self.selected_name)
-        if new_child is not None:
-            self.set_child_in_slot(new_child, self.selected_name)
 
     def _update_selected_name_editor(self, editor: imgui_utils.EnumEditor):
         """Method automatically called by our ``selected_name`` enum-property editor in order to dynamically

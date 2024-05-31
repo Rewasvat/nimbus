@@ -3,6 +3,7 @@ from nimbus.utils.imgui_widgets.base import LeafWidget
 from imgui_bundle import imgui, ImVec2, ImVec4
 
 
+# TODO: alterar cor de acordo com hovered (clicked talvez? ou só no button?).
 class RectMixin:
     """Widget mixin class to add Rect features to a widget."""
 
@@ -76,7 +77,6 @@ class RectMixin:
         draw = imgui.get_window_draw_list()
         flags = self._get_draw_flags()
         color = imgui.get_color_u32(self.color)
-        # TODO: alterar cor de acordo com hovered (clicked talvez? ou só no button?).
         draw.add_rect_filled(self.position, self.bottom_right_pos, color, self.rounding, flags)
 
     def _get_draw_flags(self):

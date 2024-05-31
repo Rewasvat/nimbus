@@ -319,11 +319,13 @@ class WidgetsTestApp(imgui_utils.AppWindow):
 
         other = Rect(imgui_utils.Colors.purple)
         other.is_top_rounded = other.is_bottom_rounded = other.is_left_rounded = other.is_right_rounded = True
-        brd.set_child_in_slot(other, "Other")
+        other.name = "OtherStuff"
+        brd.get_slot("Other").child = other
 
         list1 = AxisList([1, 1])
         list1.is_horizontal = True
-        brd.set_child_in_slot(list1, "Default")
+        list1.name = "HoriList"
+        brd.get_slot("Default").child = list1
         brd.selected_name = "Default"
 
         # r1 = Rect(imgui_utils.Colors.red)
@@ -331,23 +333,26 @@ class WidgetsTestApp(imgui_utils.AppWindow):
         # r2 = Rect(imgui_utils.Colors.green)
         # r2.is_top_rounded = True
         r3 = Rect(imgui_utils.Colors.blue)
+        r3.name = "BlueRect"
         r3.is_left_rounded = True
         r4 = Rect(imgui_utils.Colors.yellow)
+        r4.name = "YellowRect"
         r4.is_right_rounded = True
 
-        # list1.set_child_in_slot(r1, "Default")
         col1 = AxisList([1, 1])
-        list1.set_child_in_slot(col1, 0)
+        col1.name = "Column1"
+        list1.slots[0].child = col1
         # col1.margin = 15
-        col1.set_child_in_slot(ProgressBar(), 0)
+        col1.slots[0].child = ProgressBar()
         c = Corner()
         c.name = "Fukthis"
-        col1.set_child_in_slot(c, 1)
+        col1.slots[1].child = c
 
         col2 = AxisList([1, 1])
-        list1.set_child_in_slot(col2, 1)
-        col2.set_child_in_slot(r3, 0)
-        col2.set_child_in_slot(r4, 1)
+        col2.name = "Column2"
+        list1.slots[1].child = col2
+        col2.slots[0].child = r3
+        col2.slots[1].child = r4
 
     def render(self):
         if imgui.is_key_pressed(imgui.Key.escape):

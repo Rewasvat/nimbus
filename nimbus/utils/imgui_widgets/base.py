@@ -1,3 +1,4 @@
+import click
 from typing import Iterator
 from imgui_bundle import imgui, ImVec2, ImVec4
 import nimbus.utils.imgui as imgui_utils
@@ -52,11 +53,11 @@ class BaseWidget:
         BaseWidget._widget_instance_count += 1
         self._internal_id = f"{type(self).__name__}-{BaseWidget._widget_instance_count}"
         self._name: str = str(hash(self))
-        self.parent: ContainerWidget = None
-        """Parent widget containing this one. Might be None."""
+        self.slot: Slot = None
+        """Parent slot containing this widget. Might be None."""
         self._system: WidgetSystem = None
         """Root System managing this widget."""
-        self._area: imgui_utils.Vector2 = imgui_utils.Vector2()
+        self._area: imgui_utils.Vector2 = imgui_utils.Vector2()  # TODO: talvez tirar isso pq puxa do slot
         self._pos: imgui_utils.Vector2 = imgui_utils.Vector2()
         self.editable = True
         """If this widget is editable by the user during runtime. Depends on our WidgetSystem having edit enabled."""
@@ -69,8 +70,6 @@ class BaseWidget:
         """If a ``Remove Widget`` button will be added in this widget's Edit Menu. When clicked this button deletes this widget."""
         self.enabled = True
         """If this widget is enabled. Disabled widgets are not rendered by their parents."""
-        self._draw_area_outline = False
-        self._area_outline_color: ImVec4 = ImVec4(1, 1, 1, 1)
 
     @classmethod
     def is_user_creatable(cls):
@@ -92,25 +91,6 @@ class BaseWidget:
     @name.setter
     def name(self, value):
         self._name = value
-
-    @imgui_utils.bool_property()
-    def draw_area_outline(self) -> bool:
-        """If true, when this widget is rendered by its parent, a thin outline will be drawn showing the widget's area outline.
-        Essentially showing the widget's slot position and size. [GET/SET]"""
-        return self._draw_area_outline
-
-    @draw_area_outline.setter
-    def draw_area_outline(self, value: bool):
-        self._draw_area_outline = value
-
-    @imgui_utils.color_property()
-    def area_outline_color(self):
-        """The color of the area outline of this widget. See ``draw_area_outline``. [GET/SET]"""
-        return self._area_outline_color
-
-    @area_outline_color.setter
-    def area_outline_color(self, value: ImVec4):
-        self._area_outline_color = value
 
     @property
     def system(self) -> 'WidgetSystem':
@@ -182,8 +162,8 @@ class BaseWidget:
 
         Subclasses should not override this.
         """
-        if self.parent is not None:
-            self.parent.render_full_edit()
+        if self.slot is not None and self.slot.parent is not None:
+            self.slot.parent.render_full_edit()
         if not self.editable:
             return
         imgui.text(self.name)
@@ -217,17 +197,17 @@ class BaseWidget:
         if self.system is not None:
             self.system.deregister_widget(self)
 
-    def reparent_to(self, new_parent: 'ContainerWidget'):
+    def reparent_to(self, slot: 'Slot'):
         """Changes our ``parent`` to the given value.
 
         If we had a parent, this will remove ourselves from him.
 
         Args:
-            new_parent (ContainerWidget): the new parent widget to set. Might be None.
+            new_parent (Slot): the new parent slot to set. Might be None.
         """
-        if self.parent is not None:
-            self.parent.remove_child(self)
-        self.parent = new_parent
+        if self.slot is not None:
+            self.slot._child = None
+        self.slot = slot
 
     def _handle_interaction(self):
         """Handles common interaction for this widget. This should be called each frame on a ``render()``-like method.
@@ -301,6 +281,167 @@ class LeafWidget(BaseWidget):
         insert_base_init(cls, LeafWidget)
 
 
+class Slot:
+    """A Slot represents the association between a child widget and its parent ContainerWidget.
+
+    In its basic form, a slot associates a single child widget with an area of the container where it can draw a child.
+    Thus the slot allows the child to be rendered in a specific clipped area of the parent container.
+
+    Slots also contain additional data/features, such as: drawing an outline around the area of the slot, creating a new child
+    widget to fill a empty slot, limiting which types of widgets can be attached to the slot, and more.
+
+    Containers can define which type of Slot they use, and thus they can define their own Slot classes with added logic
+    for that container."""
+
+    def __init__(self, parent: 'ContainerWidget', name: str):
+        self.parent: 'ContainerWidget' = parent
+        self._child: BaseWidget = None
+        self._name: str = name if name else f"#{parent.slot_counter}"
+        self.area = imgui_utils.Rectangle((0, 0), (1, 1))
+        """The area of this slot. It's inside this area, as a imgui ChildRegion, that our child widget will be drawn.
+
+        Container widgets usually update this value on all its slots as needed.
+        """
+        self.accepted_child_types: list[type[BaseWidget]] = [BaseWidget]
+        """The types accepted by this slot as children (subclasses of them are accepted as well). Subclasses of slots should
+        override this as desired. Default is to allow ``BaseWidget`` and thus, all of its subclasses (all widgets)."""
+        self._draw_area_outline = False
+        self._area_outline_color: ImVec4 = ImVec4(1, 1, 1, 1)
+        self.enabled = True
+        """If this slot is enabled. Disabled slots are not rendered."""
+        self.edit_ignored_properties: set[str] = set()
+        """Set of imgui-property names that shall be ignored when rendering this widget's imgui-properties through the
+        default ``self.render_edit()`` implementation."""
+
+    @imgui_utils.bool_property()
+    def draw_area_outline(self) -> bool:
+        """If true, when this slot is rendered by its parent, a thin outline will be drawn showing the slots's area outline.
+        Essentially showing the slots's slot position and size. [GET/SET]"""
+        return self._draw_area_outline
+
+    @draw_area_outline.setter
+    def draw_area_outline(self, value: bool):
+        self._draw_area_outline = value
+
+    @imgui_utils.color_property()
+    def area_outline_color(self):
+        """The color of the area outline of this slot. See ``draw_area_outline``. [GET/SET]"""
+        return self._area_outline_color
+
+    @area_outline_color.setter
+    def area_outline_color(self, value: ImVec4):
+        self._area_outline_color = value
+
+    @property
+    def child(self) -> BaseWidget:
+        """The child widget attached to this slot."""
+        return self._child
+
+    @child.setter
+    def child(self, value: BaseWidget):
+        if not self.accepts_widget(value):
+            click.secho(f"{self.parent}'s {self} can't accept widget '{value}' (a {type(value)}) as child.", fg="red")
+            return
+        if self._child is not None:
+            self._child.delete()
+        self._child = value
+        if self.parent.system:
+            self.parent.system.register_widget(value)
+        value.reparent_to(self)
+
+    def render(self):
+        """Renders this slot.
+
+        This may render the slot's outline, if enabled. Render the child, if any.
+        And handle interaction to render the context menu in a empty-slot (see ``draw_open_slot_menu``).
+        """
+        if not self.enabled:
+            return
+        if min(*self.area.size) <= 0:
+            # Can't render a slot that has no size. (actually crashes)
+            return
+
+        if self.draw_area_outline:
+            outline_color = imgui.get_color_u32(self.area_outline_color)
+            imgui.get_window_draw_list().add_rect(self.area.position, self.area.bottom_right_pos, outline_color)
+
+        imgui.set_cursor_screen_pos(self.area.position)
+        window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
+        id = f"{self.parent}Slot{self._name}"
+        imgui.begin_child(id, self.area.size, window_flags=window_flags)
+        imgui.push_id(id)
+        if self.child:
+            self.child._set_pos_and_size()
+            if self.child.enabled:
+                self.child.render()
+        elif self.parent.system and self.parent.system.edit_enabled:
+            self.draw_open_slot_menu()
+        imgui.pop_id()
+        imgui.end_child()
+
+    def render_edit(self):
+        """Renders the imgui controls to allow user editing of this Slot.
+
+        The Slot default implementation only calls ``imgui_utils.render_all_properties(self)`` to automatically render the key:value editor
+        for all imgui properties in this Slot's class.
+
+        The slot's edit-rendering is handled by its parent ContainerWidget, in the widget's edit-rendering. The parent handles extra logic
+        such as adding/removing slots.
+
+        Subclasses may override this to add their own editing rendering logic or change the base one.
+        """
+        imgui_utils.render_all_properties(self, self.edit_ignored_properties)
+
+    def draw_open_slot_menu(self):
+        """Allows opening a context-menu popup with right-click in this (empty) slot.
+
+        The context-menu will render this slot's parent full-edit-menu, as well as the WidgetSystem's create new widget menu
+        to allow creating a new widget in this slot.
+
+        The created child (if any) is automatically added as the child of this slot.
+        """
+        imgui.invisible_button(f"{self}OpenSlotMenu", self.area.size)
+        if not imgui.begin_popup_context_item("CreateNewWidgetMenu"):
+            return
+        self.parent.render_full_edit()
+        imgui.separator()
+        imgui.text(f"{self} - create new widget:")
+        if self.parent.system:
+            new_child = self.parent.system.render_create_widget_menu(self.accepted_child_types)
+        else:
+            new_child = None
+            imgui.text_colored(imgui_utils.Colors.red, "Widget has no root system!")
+        if new_child:
+            self.child = new_child
+        imgui.end_popup()
+
+    def delete(self):
+        """Deletes this slot.
+
+        Besides clearing and removing this slot from its parent container, this will also delete our attached child widget (if any)."""
+        if self._child:
+            self._child.delete()
+        self.parent._slots.remove(self)
+        self.parent.on_slots_changed()
+
+    def accepts_widget(self, widget: BaseWidget):
+        """Checks if the given widget is accepted by this slot as a child.
+
+        Args:
+            widget (BaseWidget): the widget to check.
+
+        Returns:
+            bool: if the widget is accepted or not.
+        """
+        for accepted_type in self.accepted_child_types:
+            if isinstance(widget, accepted_type):
+                return True
+        return False
+
+    def __str__(self):
+        return f"Slot {self._name}"
+
+
 @not_user_creatable
 class ContainerWidget(BaseWidget):
     """Abstract Base Container Widget.
@@ -308,131 +449,134 @@ class ContainerWidget(BaseWidget):
     These are widgets that may have child widgets - they are nodes in the widget-system tree hierarchy, containing
     other widgets.
 
+    Logically, a ContainerWidget is a collection of Slots. Each slot defines where and how to render a optional child widget.
+    The container itself handles adding, removing, updating and rendering slots. Container widgets implementations thus mostly
+    handle defining its slots, and how to update them.
+
     NOTE: this class automatically sets up ``__init__()`` in sub-classes to call the initializer of this class before.
     """
 
     def __init__(self):
-        self._accepted_child_types: list[type[BaseWidget]] = [BaseWidget]
-        """The types accepted by this container as children (subclasses of them are accepted as well). Subclasses of containers should
-        override this as desired, this value is not shown in our ``render_edit``. Default is to allow ``BaseWidget`` and thus,
-        all of its subclasses (all widgets)."""
+        self._slot_class: type[Slot] = Slot
+        """Type of Slot used by this container."""
+        self._slots: list[Slot] = []
+        """List of slots this container contains. This should be a list of ``self._slot_class`` instances."""
+        self.slot_counter: int = 0
+        """Counter of how many different slots this container ever had.
+
+        Used to provide a default unique name for new slots, if one wasn't provided when instantiating it.
+        This is incremented automatically when a new slot is added, but subclasses should update this on their constructors
+        when creating/adding new slots in the constructor.
+        """
 
     def __init_subclass__(cls) -> None:
         insert_base_init(cls, ContainerWidget)
 
+    @property
+    def slots(self):
+        """Gets the list of slots this container contains."""
+        return self._slots.copy()
+
     def get_children(self) -> list[BaseWidget]:
-        """Gets a list of children widgets from this container widget.
+        """Gets a list of children widgets from the slots of this container.
 
-        Note that depending on the container's logic, some of the itens returned here might be ``None``, representing empty slots.
+        Note that some of the itens returned here might be ``None``, representing empty slots."""
+        return [slot.child for slot in self._slots]
 
-        Subclasses should override this to implement their get logic."""
-        raise NotImplementedError
-
-    def remove_child(self, child: BaseWidget):
-        """Removes the given child widget from this container, if it is our child. Does nothing otherwise.
-
-        The base implementation in ``ContainerWidget.remove_child`` checks if the child's parent is ourselves, and if so, sets ``child.parent``
-        as None and finally returns if the child was ours.
-
-        Subclasses should therefore override this method, call this base method, and if it returns true, do their own logic to remove
-        the child from themselves, returning True if the child was successfully removed.
+    def get_slot(self, name: str):
+        """Gets the slot with the given name, if any.
 
         Args:
-            child (BaseWidget): the child widget to remove
+            name (str): name of the slot to get.
 
         Returns:
-            bool: if the child was successfully removed.
+            Slot: the with the given name, or None.
         """
-        is_ours = child.parent == self
-        if is_ours:
-            child.parent = None
-        return is_ours
+        for slot in self._slots:
+            if slot._name == name:
+                return slot
+
+    def update_slots(self):
+        """Updates all of ours slots.
+
+        This is called by ContainerWidget on every frame, before calling rendering all our slots, in order to update them
+        before drawing them. Usually, we need to update the slot's area (position and size) before drawing.
+
+        Subclasses should override this to implement their own logic for updating its slots.
+        The default implementation in ContainerWidget sets the position and size on all slots to the current
+        imgui's cursor (absolute) and available content region.
+        """
+        for slot in self._slots:
+            slot.area.position = imgui_utils.Vector2(*imgui.get_cursor_screen_pos())
+            slot.area.size = imgui_utils.Vector2(*imgui.get_content_region_avail())
 
     def render(self):
         """Renders this Container widget through imgui.
 
         This is called each frame if the widget is active.
 
-        Default ContainerWidget render() implementation calls ``self._handle_interaction()``, and then iterates through all children, calling
-        ``self._render_child()`` on each, using default position/size and a index-based name.
+        Default ContainerWidget render() implementation does:
+        * Calls ``self._handle_interaction()``
+        * Calls ``self.update_slots()``
+        * Iterates through all slots (``self._slots``), calling ``slot.render()``.
 
-        Subclasses should override this to implement their own child rendering logic, selecting which childs to show and the position/size of each.
-        Remember to use ``self._render_child()`` to render them!
+        Subclasses can override this to implement their own child rendering logic, however usually just adding their own slots and updating
+        them in ``update_slots()`` should be enough.
         """
         self._handle_interaction()
-        for i, child in enumerate(self.get_children()):
-            self._render_child(child, name=f"#{i}")
+        self.update_slots()
+        for slot in self._slots:
+            slot.render()
 
-    def _render_child(self, child: BaseWidget, slot_pos: ImVec2 = None, slot_size: ImVec2 = None, name: str = None):
-        """Utility method to render a child widget at the given "slot" (position and size).
+    def render_edit(self):
+        super().render_edit()
 
-        Args:
-            child (BaseWidget): The child to render. Might be None to render a empty slot, which (if editable) allows user to select a new widget.
-            slot_pos (ImVec2, optional): Position of the slot (top-left corner), in local units. Defaults to (0,0).
-            slot_size (ImVec2, optional): Size of the slot. Defaults to ``imgui.get_content_region_avail()``, which is all available space.
-            name (str, optional): Name of the slot. Used internally as a imgui ID to separate groups of objects. Defaults to ``child.id``
-            or ``str(slot_pos)``.
+        imgui.spacing()
+        imgui.separator_text("Slots")
+        imgui.spacing()
+        for slot in self.slots:
+            opened, exists = imgui.collapsing_header(slot._name, p_visible=True)
+            imgui.set_item_tooltip(type(slot).__doc__)
+            if opened:
+                slot.render_edit()
+            if not exists:
+                slot.delete()
 
-        Returns:
-            BaseWidget: a new child, if one was created with the context-menu in a empty slot. The container class should handle this to add the
-            child to itself in that slot. Returns None otherwise.
-        """
-        if slot_pos is None:
-            slot_pos = ImVec2(0, 0)
-        if slot_size is None:
-            slot_size = imgui.get_content_region_avail()
-        if name is None:
-            name = child.id if child is not None else str(slot_pos)
+        if imgui.button("Add New Slot"):
+            self.add_new_slot()
 
-        if child and child.draw_area_outline:
-            # TODO: como saber se mostra o outline de slot vazio?
-            # TODO: slot_pos tá errado! Para o draw.add_rect aqui, devia ser em absolute-coords. Mas o default (0,0) ali é local-coords,
-            #   e tem containers que passam esse pos como absolute, e outros que passam como local...
-            outline_color = imgui.get_color_u32(child.area_outline_color)
-            imgui.get_window_draw_list().add_rect(slot_pos, slot_pos + slot_size, outline_color)
-
-        imgui.set_cursor_pos(slot_pos)
-        new_child = None
-        window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
-        if imgui.begin_child(f"{self}Slot{name}", slot_size, window_flags=window_flags):
-            imgui.push_id(f"{self}Slot{name}")
-            if child:
-                child._set_pos_and_size()
-                if child.enabled:
-                    child.render()
-            elif self.system and self.system.edit_enabled:
-                new_child = self._draw_open_slot_menu(slot_size, name)
-            imgui.pop_id()
-            imgui.end_child()
-        return new_child
-
-    def _draw_open_slot_menu(self, slot_size: ImVec2, name: str):
-        """Allows opening a context-menu popup with right-click in the current open (empty) slot.
-
-        The context-menu will render this container's full-edit-menu, as well as the WidgetSystem's create new widget menu
-        to allow creating a new widget in this slot.
+    def add_new_slot(self, slot: Slot = None, name: str = None):
+        """Adds a new slot to this container.
 
         Args:
-            slot_size (ImVec2, optional): Size of the slot we're handling the context-menu for.
-            name (str, optional): Name of the slot.
+            slot (Slot, optional): The slot instance to add. If its None, a new slot instance will be created with
+            ``self._slot_class(self, name)``.
+            name (str, optional): Optional name to give to the slot, if a slot is being created with this method (arg ``slot`` is None).
+            If no name is given, the slot'll have a default ``#N`` name, where ``N`` is our ``self.slot_counter`` value, which is
+            incremented with this method.
 
         Returns:
-            BaseWidget: a new child, if one was created with the context-menu. The container class should handle this to add the
-            child to itself in that slot. Returns None otherwise.
+            Slot: the slot object that was added to this container.
         """
-        imgui.invisible_button(f"{self}OpenSlotMenu", slot_size)
-        if not imgui.begin_popup_context_item("CreateNewWidgetMenu"):
-            return
-        self.render_full_edit()
-        imgui.separator()
-        imgui.text(f"Slot {name} - create new widget:")
-        if self.system:
-            new_child = self.system.render_create_widget_menu(self._accepted_child_types)
-        else:
-            new_child = None
-            imgui.text_colored(imgui_utils.Colors.red, "Widget has no root system!")
-        imgui.end_popup()
-        return new_child
+        self.slot_counter += 1
+        if slot is None:
+            slot = self._slot_class(self, name)
+        self._slots.append(slot)
+        self.on_slots_changed()
+        return slot
+
+    def on_slots_changed(self):
+        """Internal callback called when our list of slots changed - either adding or removing a slot.
+
+        Default implementation on ContainerWidget does nothing. Subclasses should override this as needed.
+        """
+        pass
+
+    def _on_system_changed(self):
+        super()._on_system_changed()
+        for slot in self._slots:
+            if slot.child:
+                slot.child.system = self.system
 
     def __iter__(self) -> Iterator[BaseWidget]:
         return iter(self.get_children())

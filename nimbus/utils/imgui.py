@@ -737,6 +737,10 @@ class Rectangle:
         """Returns this rectangle as a ``ImVec4(pos.x, pos.y, width, height)`` instance."""
         return ImVec4(self._pos.x, self._pos.y, self._size.x, self._size.y)
 
+    def copy(self):
+        """Returns a new rectangle instance with the same values as this one."""
+        return type(self)(self._pos, self._size)
+
 # ============== Base Widgets (generic for any theme?)
 # TODO: suportar drag&drop pra mover widgets? simple (ou base) widgets seriam objetos moviveis, enquanto
 #   os "slots" pra filhos nos container widgets seriam os possiveis alvos pra drop.
