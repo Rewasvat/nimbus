@@ -216,6 +216,11 @@ class AppWindow(BasicWindow):
         The View menu is a IMGUI-based menu that allows the user to change aspects of the window's layout/content, such as changing options of
         the status-bar, visibility of windows, and the overall UI theme.
         """
+        self.enable_viewports: bool = False
+        """Enables 'viewports'.
+
+        Viewports allow imgui windows to be dragged outside the AppWindow, becoming other OS GUI windows (with a imgui style).
+        """
 
     def run(self):
         """Runs this window as a new IMGUI App.
@@ -247,7 +252,7 @@ class AppWindow(BasicWindow):
             run_params.imgui_window_params.default_imgui_window_type = (
                 hello_imgui.DefaultImGuiWindowType.provide_full_screen_dock_space
             )
-
+        run_params.imgui_window_params.enable_viewports = self.enable_viewports
         run_params.docking_params.dockable_windows = self.children
 
         run_params.ini_folder_type = hello_imgui.IniFolderType.home_folder
@@ -681,6 +686,21 @@ class Vector2(imgui.ImVec2):
     def from_angle(cls, angle: float):
         """Returns a unit-vector based on the given ANGLE (in radians)."""
         return cls(math.cos(angle), math.sin(angle))
+
+    @classmethod
+    def from_cursor_pos(cls):
+        """Returns a vector with the values of imgui's current cursor position, in local coords (from ``imgui.get_cursor_pos()``)"""
+        return cls(*imgui.get_cursor_pos())
+
+    @classmethod
+    def from_cursor_screen_pos(cls):
+        """Returns a vector with the values of imgui's current cursor position, in absolute coords (from ``imgui.get_cursor_screen_pos()``)"""
+        return cls(*imgui.get_cursor_screen_pos())
+
+    @classmethod
+    def from_available_content_region(cls):
+        """Returns a vector with the values of imgui's available content region (from ``imgui.get_content_region_avail()``)"""
+        return cls(*imgui.get_content_region_avail())
 
 
 class Rectangle:

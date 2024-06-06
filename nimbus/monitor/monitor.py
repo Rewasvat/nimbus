@@ -307,6 +307,7 @@ class WidgetsTestApp(imgui_utils.AppWindow):
         self.show_app_menu = False
         self.show_menu_bar = False
         self.show_status_bar = False
+        self.enable_viewports = True
         from nimbus.utils.imgui_widgets import WidgetSystem
         self.root = WidgetSystem()
         self.elapsed = 0.0
@@ -314,8 +315,11 @@ class WidgetsTestApp(imgui_utils.AppWindow):
 
     def create_contents(self):
         from nimbus.utils.imgui_widgets import Board, AxisList, Rect, Label, Corner, Panel, ProgressBar
-        brd = Panel(["Default", "Other"])
-        self.root.register_widget(brd)
+        pnl = Panel()
+        self.root.register_widget(pnl)
+
+        brd = Board(["Default", "Other"])
+        pnl.content.child = brd
 
         other = Rect(imgui_utils.Colors.purple)
         other.is_top_rounded = other.is_bottom_rounded = other.is_left_rounded = other.is_right_rounded = True
