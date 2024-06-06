@@ -1,7 +1,5 @@
 import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import BaseWidget, ContainerWidget, Slot
-from nimbus.utils.imgui_widgets.board import Board
-from nimbus.utils.imgui_widgets.axis_list import AxisList
+from nimbus.utils.imgui_widgets.base import ContainerWidget, Slot
 from nimbus.utils.imgui_widgets.corner import Corner, CornerType
 from nimbus.utils.imgui_widgets.rect import Rect
 from imgui_bundle import imgui, ImVec2, ImVec4
@@ -20,24 +18,18 @@ class PanelBorders(Flag):
     ALL = TOP | RIGHT | BOTTOM | LEFT
 
 
+# TODO: arrumar bordas só poderem ter Leafs ou AxisLists com só Leafs
 # TODO: border ratios com absolute=False tão bizarros
-class Panel(Board):
-    """A Board widget with optional margin and borders around its displayed child.
+class Panel(ContainerWidget):
+    """A container widget with a single child and optional margin and borders around it.
 
-    The borders consist of Corner and AxisList widgets, rendered as childs of this widget but below the selected child
-    and controlled by the Panel (not editable by the user). The AxisLists are leaf-widgets-only that represent the space of the
-    border, between the corners.
-
-    Therefore the user can configure the border to display as he wants it.
-    A single Rect as child in the list, for example, would make it a filled solid color border with the corners.
+    The borders are slots themselves, that only accept Leaf widgets. So the panel accepts a single main child widget in its center,
+    and up to four leaf-childs representing the borders. For example, a single Rect as a border would make it a filled solid color border.
     """
 
-    def __init__(self, names: list[str] = None):
-        super().__init__(names)
-        base_names = [
-            "CornerTopLeft", "CornerTopRight", "CornerBottomLeft", "CornerBottomRight",
-            "BorderTop", "BorderBottom", "BorderLeft", "BorderRight"
-        ]
+    def __init__(self):
+        self.accepts_new_slots = False
+        base_names = ["CornerTopLeft", "CornerTopRight", "CornerBottomLeft", "CornerBottomRight"]
         self._fixed_slots = [Slot(self, name) for name in base_names]
         self.corners = [
             Corner(CornerType.TOP_LEFT),
@@ -46,10 +38,10 @@ class Panel(Board):
             Corner(CornerType.BOTTOM_RIGHT),
         ]
         self.borders = {
-            PanelBorders.TOP: AxisList([1], True),
-            PanelBorders.BOTTOM: AxisList([1], True),
-            PanelBorders.LEFT: AxisList([1]),
-            PanelBorders.RIGHT: AxisList([1]),
+            PanelBorders.TOP: Slot(self, "Top Border"),
+            PanelBorders.BOTTOM: Slot(self, "Bottom Border"),
+            PanelBorders.LEFT: Slot(self, "Left Border"),
+            PanelBorders.RIGHT: Slot(self, "Right Border"),
         }
         self._borders_type: PanelBorders = PanelBorders.ALL
         self._out_margin: float = 5.0
@@ -59,19 +51,19 @@ class Panel(Board):
         self._use_absolute_values = False
         self._color_border_childs = True
 
+        self._child_slot = Slot(self, "Content")
+        self._child_slot.can_be_deleted = False
+        self._slots.append(self._child_slot)
+
         for i, corner in enumerate(self.corners):
             self._fixed_slots[i].child = corner
             c = corner.type.name.lower()
             c = "".join([p.capitalize() for p in c.split("_")])
             corner.name = f"{self.id}-{c}Corner"
             corner.editable = False
-        for i, (side, border) in enumerate(self.borders.items()):
-            self._fixed_slots[i+4].child = border
-            border.only_accept_leafs = True
-            border.is_horizontal = side in (PanelBorders.TOP | PanelBorders.BOTTOM)
-            border.name = f"{self.id}-{side.name.capitalize()}Border"
-            border.edit_ignored_properties = set(p for p in imgui_utils.get_all_renderable_properties(type(border)).keys()) - {"margin", "slices"}
-            border.allow_edit_delete = False
+        for border in self.borders.values():
+            border.can_be_deleted = False
+            self._slots.append(border)
 
     # Editable Properties
     @imgui_utils.enum_property(PanelBorders)
@@ -154,21 +146,20 @@ class Panel(Board):
         for corner in self.corners:
             corner.color = value
         for border in self.borders.values():
-            border.slot.area_outline_color = value
-            if self._color_border_childs:
-                for child in border.get_children():
-                    if hasattr(child, "color"):
-                        setattr(child, "color", value)
+            border.area_outline_color = value
+            if self._color_border_childs and border.child:
+                if hasattr(border.child, "color"):
+                    setattr(border.child, "color", value)
 
     @imgui_utils.bool_property()
     def outline_borders(self) -> bool:
         """If a thin outline will be rendered, showing the area of the borders. [GET/SET]"""
-        return self.borders[PanelBorders.TOP].slot.draw_area_outline
+        return self.borders[PanelBorders.TOP].draw_area_outline
 
     @outline_borders.setter
     def outline_borders(self, value: bool):
         for border in self.borders.values():
-            border.slot.draw_area_outline = value
+            border.draw_area_outline = value
 
     # Regular Properties
     @property
@@ -210,9 +201,14 @@ class Panel(Board):
             end_pos.x = bottom_right_corner.bottom_right_pos.x
         return end_pos - self.child_pos
 
+    @property
+    def content(self):
+        """The content slot of this Panel."""
+        return self._child_slot
+
     # Methods
     def update_all_borders(self):
-        """Updates and renders (as required) all of our corner and border widgets."""
+        """Updates all of our corner and border slots."""
         for corner in self.corners:
             self._update_corner(corner)
 
@@ -220,7 +216,7 @@ class Panel(Board):
             self._update_border(border, side)
 
     def _update_corner(self, corner: Corner):
-        """Updates and renders (if enabled) our given child corner."""
+        """Updates our given child corner."""
         margin_vec = imgui_utils.Vector2(self._out_margin, self._out_margin)
         size = self.corner_size
         pos = self._pos.copy()
@@ -245,14 +241,12 @@ class Panel(Board):
         corner.slot.area.position = pos
         corner.slot.area.size = size
 
-    def _update_border(self, border: AxisList, side: PanelBorders):
-        """Updates and renders (if enabled) our given child border AxisList as being at the given SIDE."""
+    def _update_border(self, border: Slot, side: PanelBorders):
+        """Updates our given border slot as being at the given SIDE."""
         enabled = side in self._borders_type
-        border.slot.enabled = enabled
+        border.enabled = enabled
         if not enabled:
             return
-
-        border.enabled = True
 
         # This is a {border->corner indexes} table that associates a border with its "start"/"end" corners,
         # according to the corner's index in our self.corners array.
@@ -282,8 +276,8 @@ class Panel(Board):
                 p2 += (0, end_corner.area.y)
 
         actual_border_size = p2 - p1
-        border.slot.area.position = p1
-        border.slot.area.size = actual_border_size
+        border.area.position = p1
+        border.area.size = actual_border_size
 
     def fill_borders_with_rects(self):
         """Fills our borders with rects, by adding a new Rect widget to any empty slot in our borders.
@@ -291,20 +285,17 @@ class Panel(Board):
         These rects will have our border color.
         """
         for side, border in self.borders.items():
-            for i, slot in enumerate(border.slots):
-                if slot.child is None:
-                    r = Rect()
-                    r.color = self.border_color
-                    r.name = f"{self.id}-{side.name.capitalize()}Rect#{i}"
-                    slot.child = r
+            if border.child is None:
+                r = Rect()
+                r.color = self.border_color
+                r.name = f"{self.id}-{side.name.capitalize()}Rect"
+                border.child = r
 
     # Method Overrides
     def update_slots(self):
         self.update_all_borders()
-        for slot in self._slots:
-            # Only the board slots.
-            slot.area.position = self.child_pos
-            slot.area.size = self.child_size
+        self._child_slot.area.position = self.child_pos
+        self._child_slot.area.size = self.child_size
 
     def render(self):
         self._handle_interaction()
@@ -314,8 +305,8 @@ class Panel(Board):
         for slot in self._slots:
             slot.render()
 
-    def render_edit(self):
-        super().render_edit()
+    def render_edit_details(self):
+        super().render_edit_details()
         imgui.spacing()
         imgui.separator_text("Commands")
         imgui.spacing()

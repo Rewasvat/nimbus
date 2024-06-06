@@ -103,7 +103,7 @@ class AxisList(ContainerWidget):
     def update_slots(self):
         current_slots: list[AxisListSlot] = self._slots
 
-        total_slices_size = sum(self.slices)
+        total_slices_size = max(sum(self.slices), 1)
 
         axis_size = self._area.x if self._is_horizontal else self._area.y
         axis_size -= self._margin * (len(current_slots) + 1)
