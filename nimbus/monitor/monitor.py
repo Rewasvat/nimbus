@@ -309,7 +309,7 @@ class WidgetsTestApp(imgui_utils.AppWindow):
         self.show_status_bar = False
         self.enable_viewports = True
         from nimbus.utils.imgui_widgets import WidgetSystem
-        self.root = WidgetSystem()
+        self.root = WidgetSystem("Test")
         self.elapsed = 0.0
         self.create_contents()
 
