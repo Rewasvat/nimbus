@@ -1,6 +1,6 @@
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import BaseWidget, ContainerWidget, Slot
-from imgui_bundle import imgui, ImVec2
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import ContainerWidget, Slot
+from imgui_bundle import imgui
 
 
 class BoardSlot(Slot):
@@ -13,7 +13,7 @@ class BoardSlot(Slot):
         super().__init__(parent, name)
         self.parent: Board = parent  # Just to change the type-hint
 
-    @imgui_utils.string_property(imgui.InputTextFlags_.enter_returns_true)
+    @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
         """Name of this slot. User can change this, but it should be unique amongst all slots of this container. [GET/SET]"""
         return self._name
@@ -55,7 +55,7 @@ class Board(ContainerWidget):
         """Gets the selected slot. [GET]"""
         return self.get_slot(self._selected_name)
 
-    @imgui_utils.enum_property([], flags=imgui.SelectableFlags_.dont_close_popups)
+    @types.enum_property([], flags=imgui.SelectableFlags_.dont_close_popups)
     def selected_name(self) -> str:
         """Gets the selected name. Change this to update which slot is displayed. [GET/SET]"""
         return self._selected_name
@@ -71,7 +71,7 @@ class Board(ContainerWidget):
             self._selected_name = self.boards[0] if len(self.boards[0]) > 0 else ""
         self.selected_name = self._selected_name  # to update enabled slots.
 
-    def _update_selected_name_editor(self, editor: imgui_utils.EnumEditor):
+    def _update_selected_name_editor(self, editor: types.EnumEditor):
         """Method automatically called by our ``selected_name`` enum-property editor in order to dynamically
         update its settings before editing."""
         editor.options = self.boards

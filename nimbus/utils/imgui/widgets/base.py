@@ -1,8 +1,12 @@
 import click
 from typing import Iterator
-from imgui_bundle import imgui, ImVec2, ImVec4, imgui_node_editor  # type: ignore
-import nimbus.utils.imgui as imgui_utils
-import nimbus.utils.imgui_widgets.actions as actions
+from imgui_bundle import imgui, ImVec2, imgui_node_editor  # type: ignore
+import nimbus.utils.imgui.actions as actions
+from nimbus.utils.imgui.math import Vector2, Rectangle
+from nimbus.utils.imgui.colors import Colors, Color
+from nimbus.utils.imgui.general import not_user_creatable, menu_item, object_creation_menu
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor
+import nimbus.utils.imgui.type_editor as types
 
 
 def insert_base_init(sub_cls: type, base_cls: type):
@@ -31,10 +35,10 @@ def draw_widget_pin_icon(is_filled):
     """
     draw = imgui.get_window_draw_list()
     size = imgui.get_text_line_height()  # 24  # from node examples
-    p1 = imgui_utils.Vector2.from_cursor_screen_pos()
+    p1 = Vector2.from_cursor_screen_pos()
     p2 = p1 + (size, size * 0.5)
     p3 = p1 + (0, size)
-    color = imgui.get_color_u32(imgui_utils.Colors.green)
+    color = Colors.green.u32
     if is_filled:
         draw.add_triangle_filled(p1, p2, p3, color)
     else:
@@ -43,7 +47,7 @@ def draw_widget_pin_icon(is_filled):
     imgui.dummy((size, size))
 
 
-class WidgetParentPin(imgui_utils.NodePin):
+class WidgetParentPin(NodePin):
     """Node Pin for a widget's parent container."""
 
     def __init__(self, parent: 'BaseWidget'):
@@ -57,8 +61,8 @@ class WidgetParentPin(imgui_utils.NodePin):
         return f"{self.parent_node} Parent Slot"
 
 
-@imgui_utils.not_user_creatable
-class BaseWidget(imgui_utils.Node):
+@not_user_creatable
+class BaseWidget(Node):
     """Abstract Base Widget Class.
 
     Shouldn't be used on its own.
@@ -77,8 +81,8 @@ class BaseWidget(imgui_utils.Node):
         """Parent slot containing this widget. Might be None."""
         self._system: WidgetSystem = None
         """Root System managing this widget."""
-        self._area: imgui_utils.Vector2 = imgui_utils.Vector2()  # TODO: talvez tirar isso pq puxa do slot
-        self._pos: imgui_utils.Vector2 = imgui_utils.Vector2()
+        self._area: Vector2 = Vector2()  # TODO: talvez tirar isso pq puxa do slot
+        self._pos: Vector2 = Vector2()
         self.editable = True
         """If this widget is editable by the user during runtime. Depends on our WidgetSystem having edit enabled."""
         self.interactive = True
@@ -95,7 +99,7 @@ class BaseWidget(imgui_utils.Node):
         """Fixed ID of this widget. IDs are uniquely generated at creation, according to widget type and overall instance count."""
         return self._internal_id
 
-    @imgui_utils.string_property(imgui.InputTextFlags_.enter_returns_true)
+    @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
         """Name of this widget. User can change this, but it should be unique amongst all existing widgets.
         By default it's ``str(hash(self))``. [GET/SET]"""
@@ -164,7 +168,7 @@ class BaseWidget(imgui_utils.Node):
         """
         imgui.text(f"Widget {self.id}")
         imgui.set_item_tooltip(type(self).__doc__)
-        imgui_utils.render_all_properties(self, self.edit_ignored_properties)
+        types.render_all_properties(self, self.edit_ignored_properties)
 
     def render_full_edit(self):
         """Renders the EDIT menu for the entire hierarchy of widgets this one belongs to.
@@ -189,7 +193,7 @@ class BaseWidget(imgui_utils.Node):
                 imgui.spacing()
                 imgui.separator()
                 imgui.spacing()
-                if imgui_utils.menu_item("Remove Widget"):
+                if menu_item("Remove Widget"):
                     self.reparent_to()
                 imgui.set_item_tooltip("Removes this widget from its parent. Without a parent, it won't be rendered.")
             imgui.end_menu()
@@ -252,22 +256,22 @@ class BaseWidget(imgui_utils.Node):
         imgui.set_cursor_pos(pos)
         return clicked
 
-    def _set_pos_and_size(self, pos: imgui_utils.Vector2 = None, size: imgui_utils.Vector2 = None):
+    def _set_pos_and_size(self, pos: Vector2 = None, size: Vector2 = None):
         """Updates the area and position vectors this widget internally stores, according to the parent slot this widget is being
         drawn to.
 
         This is automatically called on child widgets by their ContainerWidget parents when they render their children.
 
         Args:
-            pos (imgui_utils.Vector2, optional): The absolute position of the widget. If None, will get imgui's current cursor position.
+            pos (Vector2, optional): The absolute position of the widget. If None, will get imgui's current cursor position.
             Defaults to None.
-            size (imgui_utils.Vector2, optional): The size of the widget. If None, will get imgui's current available region size.
+            size (Vector2, optional): The size of the widget. If None, will get imgui's current available region size.
             Defaults to None.
         """
         if pos is None:
-            pos = imgui_utils.Vector2(*imgui.get_cursor_screen_pos())
+            pos = Vector2(*imgui.get_cursor_screen_pos())
         if size is None:
-            size = imgui_utils.Vector2(*imgui.get_content_region_avail())
+            size = Vector2(*imgui.get_content_region_avail())
         self._area = size
         self._pos = pos
 
@@ -278,7 +282,7 @@ class BaseWidget(imgui_utils.Node):
         """
         pass
 
-    def get_input_pins(self) -> list[imgui_utils.NodePin]:
+    def get_input_pins(self) -> list[NodePin]:
         """Gets list of all input pins in this widget. Used when the widget is represented in a Node Editor.
         BaseWidget only returns our parent pin.
         """
@@ -288,7 +292,7 @@ class BaseWidget(imgui_utils.Node):
         return f"{self.id}:{self.name}"
 
 
-@imgui_utils.not_user_creatable
+@not_user_creatable
 class LeafWidget(BaseWidget):
     """Abstract Base Leaf Widget.
 
@@ -304,7 +308,7 @@ class LeafWidget(BaseWidget):
         insert_base_init(cls, LeafWidget)
 
 
-class Slot(imgui_utils.NodePin):
+class Slot(NodePin):
     """A Slot represents the association between a child widget and its parent ContainerWidget.
 
     In its basic form, a slot associates a single child widget with an area of the container where it can draw a child.
@@ -321,7 +325,7 @@ class Slot(imgui_utils.NodePin):
         self.parent: 'ContainerWidget' = parent  # will be the same as self.parent_node, but proper type-hint.
         self._child: BaseWidget = None
         self._name: str = name if name else f"#{parent.slot_counter}"
-        self.area = imgui_utils.Rectangle((0, 0), (1, 1))
+        self.area = Rectangle((0, 0), (1, 1))
         """The area of this slot. It's inside this area, as a imgui ChildRegion, that our child widget will be drawn.
 
         Container widgets usually update this value on all its slots as needed.
@@ -331,16 +335,16 @@ class Slot(imgui_utils.NodePin):
         """The types accepted by this slot as children (subclasses of them are accepted as well). Subclasses of slots should
         override this as desired. Default is to allow ``BaseWidget`` and thus, all of its subclasses (all widgets)."""
         self._draw_area_outline = False
-        self._area_outline_color: ImVec4 = ImVec4(1, 1, 1, 1)
+        self._area_outline_color: Color = Color(1, 1, 1, 1)
         self.enabled = True
         """If this slot is enabled. Disabled slots are not rendered."""
         self.edit_ignored_properties: set[str] = set()
         """Set of imgui-property names that shall be ignored when rendering this widget's imgui-properties through the
         default ``self.render_edit_details()`` implementation."""
-        self.default_link_color = imgui_utils.Colors.green  # same color used in draw_widget_pin_icon
+        self.default_link_color = Colors.green  # same color used in draw_widget_pin_icon
         self.can_be_deleted = True
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def draw_area_outline(self) -> bool:
         """If true, when this slot is rendered by its parent, a thin outline will be drawn showing the slots's area outline.
         Essentially showing the slots's slot position and size. [GET/SET]"""
@@ -350,13 +354,13 @@ class Slot(imgui_utils.NodePin):
     def draw_area_outline(self, value: bool):
         self._draw_area_outline = value
 
-    @imgui_utils.color_property()
+    @types.color_property()
     def area_outline_color(self):
         """The color of the area outline of this slot. See ``draw_area_outline``. [GET/SET]"""
         return self._area_outline_color
 
     @area_outline_color.setter
-    def area_outline_color(self, value: ImVec4):
+    def area_outline_color(self, value: Color):
         self._area_outline_color = value
 
     @property
@@ -390,8 +394,7 @@ class Slot(imgui_utils.NodePin):
             return
 
         if self.draw_area_outline:
-            outline_color = imgui.get_color_u32(self.area_outline_color)
-            imgui.get_window_draw_list().add_rect(self.area.position, self.area.bottom_right_pos, outline_color)
+            imgui.get_window_draw_list().add_rect(self.area.position, self.area.bottom_right_pos, self.area_outline_color.u32)
 
         imgui.set_cursor_screen_pos(self.area.position)
         window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
@@ -418,7 +421,7 @@ class Slot(imgui_utils.NodePin):
 
         Subclasses may override this to add their own editing rendering logic or change the base one.
         """
-        imgui_utils.render_all_properties(self, self.edit_ignored_properties)
+        types.render_all_properties(self, self.edit_ignored_properties)
 
     def draw_open_slot_menu(self):
         """Allows opening a context-menu popup with right-click in this (empty) slot.
@@ -438,7 +441,7 @@ class Slot(imgui_utils.NodePin):
             new_child = self.parent.system.render_create_widget_menu(self.accepted_child_types)
         else:
             new_child = None
-            imgui.text_colored(imgui_utils.Colors.red, "Widget has no root system!")
+            imgui.text_colored(Colors.red, "Widget has no root system!")
         if new_child:
             self.child = new_child
         imgui.end_popup()
@@ -470,7 +473,7 @@ class Slot(imgui_utils.NodePin):
         imgui.text(self._name)
         draw_widget_pin_icon(self.is_linked_to_any())
 
-    def can_link_to(self, pin: imgui_utils.NodePin) -> tuple[bool, str]:
+    def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, why_not = super().can_link_to(pin)
         if not ok:
             return ok, why_not
@@ -481,14 +484,14 @@ class Slot(imgui_utils.NodePin):
             return False, "Already linked to that widget."
         return True, "success"
 
-    def on_new_link_added(self, link: imgui_utils.NodeLink):
+    def on_new_link_added(self, link: NodeLink):
         # links for us are always:
         #   start-pin: the slot (us)
         #   end-pin: the baseWidget parent-node pin. (the child widget)
         # And if this was called, linking (setting this as child) was possible.
         self.child = link.end_pin.parent_node
 
-    def on_link_removed(self, link: imgui_utils.NodeLink):
+    def on_link_removed(self, link: NodeLink):
         self.child = None
 
     def __str__(self):
@@ -496,7 +499,7 @@ class Slot(imgui_utils.NodePin):
 
 
 # TODO: render-edit: permitir drag&drop pra mudar ordem dos slots, arrastando eles no menu.
-@imgui_utils.not_user_creatable
+@not_user_creatable
 class ContainerWidget(BaseWidget):
     """Abstract Base Container Widget.
 
@@ -525,7 +528,7 @@ class ContainerWidget(BaseWidget):
         """
         self.accepts_new_slots = True
         """If user-interaction (while editing) can add new slots to this container."""
-        self._edit_slot_header_color = ImVec4(0.1, 0.5, 0.3, 1)
+        self._edit_slot_header_color = Color(0.1, 0.5, 0.3, 1)
 
     def __init_subclass__(cls) -> None:
         insert_base_init(cls, ContainerWidget)
@@ -565,8 +568,8 @@ class ContainerWidget(BaseWidget):
         imgui's cursor (absolute) and available content region.
         """
         for slot in self._slots:
-            slot.area.position = imgui_utils.Vector2(*imgui.get_cursor_screen_pos())
-            slot.area.size = imgui_utils.Vector2(*imgui.get_content_region_avail())
+            slot.area.position = Vector2(*imgui.get_cursor_screen_pos())
+            slot.area.size = Vector2(*imgui.get_content_region_avail())
 
     def render(self):
         """Renders this Container widget through imgui.
@@ -629,7 +632,7 @@ class ContainerWidget(BaseWidget):
         self.on_slots_changed()
         return slot
 
-    def get_output_pins(self) -> list[imgui_utils.NodePin]:
+    def get_output_pins(self) -> list[NodePin]:
         return self.slots
 
     def on_slots_changed(self):
@@ -649,14 +652,14 @@ class ContainerWidget(BaseWidget):
         return iter(self.get_children())
 
 
-class SystemRootPin(imgui_utils.NodePin):
+class SystemRootPin(NodePin):
     """Node Pin for a WidgetSystem's Root widget."""
 
     def __init__(self, parent: 'WidgetSystem'):
         super().__init__(parent, imgui_node_editor.PinKind.output)
         self.parent_node: WidgetSystem = parent
         self._child: BaseWidget = None
-        self.default_link_color = imgui_utils.Colors.green  # same color used in draw_widget_pin_icon
+        self.default_link_color = Colors.green  # same color used in draw_widget_pin_icon
 
     @property
     def child(self):
@@ -679,7 +682,7 @@ class SystemRootPin(imgui_utils.NodePin):
         imgui.text("Root")
         draw_widget_pin_icon(self.is_linked_to_any())
 
-    def can_link_to(self, pin: imgui_utils.NodePin) -> tuple[bool, str]:
+    def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
         if not ok:
             return ok, msg
@@ -687,15 +690,15 @@ class SystemRootPin(imgui_utils.NodePin):
             return False, "Can only link to a Widget's Parent pin."
         return True, "success"
 
-    def on_new_link_added(self, link: imgui_utils.NodeLink):
+    def on_new_link_added(self, link: NodeLink):
         # kinda the same as in the Slot class
         self.child = link.end_pin.parent_node
 
-    def on_link_removed(self, link: imgui_utils.NodeLink):
+    def on_link_removed(self, link: NodeLink):
         self.child = None
 
 
-class WidgetSystem(imgui_utils.Node):
+class WidgetSystem(Node):
     """Root object managing a Widget and Action hierarchy."""
 
     def __init__(self, name: str):
@@ -710,7 +713,7 @@ class WidgetSystem(imgui_utils.Node):
             self.root,
             actions.ActionFlow(self, imgui_node_editor.PinKind.output, "Test")
         ]
-        self.node_editor = imgui_utils.NodeEditor(self.render_node_editor_context_menu)
+        self.node_editor = NodeEditor(self.render_node_editor_context_menu)
         self.node_editor.nodes.append(self)
 
     def render(self):
@@ -826,7 +829,7 @@ class WidgetSystem(imgui_utils.Node):
         """
         new_child = None
         for cls in accepted_bases:
-            new_child = imgui_utils.object_creation_menu(cls, lambda cls: cls.__name__.replace("Widget", ""))
+            new_child = object_creation_menu(cls, lambda cls: cls.__name__.replace("Widget", ""))
             if new_child is not None:
                 break
         if new_child:
@@ -839,20 +842,20 @@ class WidgetSystem(imgui_utils.Node):
         Returns:
             Action: the newly created instance of a action, if any. None otherwise.
         """
-        new_action: actions.Action = imgui_utils.object_creation_menu(actions.Action)
+        new_action: actions.Action = object_creation_menu(actions.Action)
         if new_action:
             self.node_editor.nodes.append(new_action)
             new_action.editor = self.node_editor
         return new_action
 
-    def render_node_editor_context_menu(self, linked_to_pin: imgui_utils.NodePin):
+    def render_node_editor_context_menu(self, linked_to_pin: NodePin):
         """Context-menu contents for the node-editor's background menu.
 
         This is used when right-clicking the editor's background or pulling a link to create a new node.
         This is usually used as a menu to create a new node.
 
         Args:
-            linked_to_pin (imgui_utils.NodePin): If given, this is the pin from which the user pulled a link to
+            linked_to_pin (NodePin): If given, this is the pin from which the user pulled a link to
             create a new node. So it can be used to limit the contents of the menu, or of which new nodes can be created.
             The NodeEditor will take care of properly positioning the new node and linking it to this pin.
 
@@ -868,7 +871,7 @@ class WidgetSystem(imgui_utils.Node):
             new_action = self.render_create_action_menu()
             return new_widget or new_action
 
-    def get_output_pins(self) -> list[imgui_utils.NodePin]:
+    def get_output_pins(self) -> list[NodePin]:
         return self._output_pins
 
     def __str__(self):

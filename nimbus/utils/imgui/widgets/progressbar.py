@@ -1,9 +1,11 @@
 import math
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import LeafWidget
-from nimbus.utils.imgui_widgets.rect import RectMixin
-from nimbus.utils.imgui_widgets.label import TextMixin
-from imgui_bundle import imgui, ImVec2, ImVec4
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.widgets.rect import RectMixin
+from nimbus.utils.imgui.widgets.label import TextMixin
+from nimbus.utils.imgui.colors import Colors, Color
+from nimbus.utils.imgui.math import Vector2
+from imgui_bundle import imgui
 from enum import Enum
 
 
@@ -34,35 +36,34 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     def __init__(self):
         RectMixin.__init__(self)
         TextMixin.__init__(self)
-        self.color = imgui_utils.Colors.grey
-        self._bar_color: ImVec4 = imgui_utils.Colors.yellow
-        self._frame_color: ImVec4 = imgui_utils.Colors.white
+        self.color = Colors.grey
+        self._bar_color: Color = Colors.yellow
+        self._frame_color: Color = Colors.white
         self._frame_thickness: float = 5.0
         self._bar_type: BarType = BarType.HORIZONTAL
         self._value: float = 0.0
         self._inner_hole_ratio: float = 0.0
 
     # Editable Properties
-
-    @imgui_utils.color_property()
-    def bar_color(self) -> ImVec4:
+    @types.color_property()
+    def bar_color(self) -> Color:
         """The color of the bar fill. [GET/SET]"""
         return self._bar_color
 
     @bar_color.setter
-    def bar_color(self, value: ImVec4):
+    def bar_color(self, value: Color):
         self._bar_color = value
 
-    @imgui_utils.color_property()
-    def frame_color(self) -> ImVec4:
+    @types.color_property()
+    def frame_color(self) -> Color:
         """The color of the bar frame outline. [GET/SET]"""
         return self._frame_color
 
     @frame_color.setter
-    def frame_color(self, value: ImVec4):
+    def frame_color(self, value: Color):
         self._frame_color = value
 
-    @imgui_utils.float_property()
+    @types.float_property()
     def frame_thickness(self) -> float:
         """The thickness, in pixels, of the bar's frame outline. [GET/SET]"""
         return self._frame_thickness
@@ -71,7 +72,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     def frame_thickness(self, value: float):
         self._frame_thickness = value
 
-    @imgui_utils.enum_property(BarType)
+    @types.enum_property(BarType)
     def bar_type(self) -> BarType:
         """The type of this progress bar. [GET/SET]"""
         return self._bar_type
@@ -80,7 +81,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     def bar_type(self, value: BarType):
         self._bar_type = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def value(self) -> float:
         """The current value of the bar [GET/SET]"""
         return self._value
@@ -89,7 +90,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     def value(self, value: float):
         self._value = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def inner_hole_ratio(self) -> float:
         """The ratio of the circle radius that will be a hole. [GET/SET]
 
@@ -119,7 +120,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         draw = imgui.get_window_draw_list()
         pos = self.position
         bottom_right = self.bottom_right_pos
-        draw.add_rect_filled(pos, bottom_right, imgui.get_color_u32(self.color), self.rounding, self._get_draw_flags())
+        draw.add_rect_filled(pos, bottom_right, self.color.u32, self.rounding, self._get_draw_flags())
 
         hor_fraction = self._value if is_horizontal else 1.0
         ver_fraction = self._value if (not is_horizontal) else 1.0
@@ -129,9 +130,9 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         else:
             bar_start_pos = pos
             bar_end_pos = pos + self._area * (hor_fraction, ver_fraction)
-        draw.add_rect_filled(bar_start_pos, bar_end_pos, imgui.get_color_u32(self._bar_color), self.rounding, self._get_draw_flags())
+        draw.add_rect_filled(bar_start_pos, bar_end_pos, self._bar_color.u32, self.rounding, self._get_draw_flags())
 
-        draw.add_rect(pos, bottom_right, imgui.get_color_u32(self._frame_color), self.rounding, self._get_draw_flags(), self._frame_thickness)
+        draw.add_rect(pos, bottom_right, self._frame_color.u32, self.rounding, self._get_draw_flags(), self._frame_thickness)
 
     def _draw_circle_bar(self):
         """Draws the circle-type bars."""
@@ -141,7 +142,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         center = self.position + self._area * 0.5
         radius = min(*self._area) * 0.5
 
-        draw.add_circle_filled(center, radius, imgui.get_color_u32(self.color))
+        draw.add_circle_filled(center, radius, self.color.u32)
 
         first_half = min(0.5, self._value) / 0.5
         secnd_half = max(0, self._value - 0.5) / 0.5
@@ -151,10 +152,10 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
             draw.path_arc_to(center, radius, math.pi*1.5, math.pi*1.5 + first_half * math.pi)
         else:
             angle = math.pi*1.5 - math.pi * first_half
-            draw.path_line_to(center + imgui_utils.Vector2.from_angle(angle) * radius)
+            draw.path_line_to(center + Vector2.from_angle(angle) * radius)
             draw.path_arc_to(center, radius, angle, math.pi*1.5)
         draw.path_line_to(center)
-        draw.path_fill_convex(imgui.get_color_u32(self._bar_color))
+        draw.path_fill_convex(self._bar_color.u32)
 
         if secnd_half > 0:
             if is_clockwise:
@@ -162,15 +163,15 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
                 draw.path_arc_to(center, radius, math.pi*0.5, (0.5 + secnd_half) * math.pi)
             else:
                 angle = math.pi * 0.5 - secnd_half * math.pi
-                draw.path_line_to(center + imgui_utils.Vector2.from_angle(angle) * radius)
+                draw.path_line_to(center + Vector2.from_angle(angle) * radius)
                 draw.path_arc_to(center, radius, angle, math.pi*0.5)
             draw.path_line_to(center)
-            draw.path_fill_convex(imgui.get_color_u32(self._bar_color))
+            draw.path_fill_convex(self._bar_color.u32)
 
         if self._inner_hole_ratio > 0:
-            draw.add_circle_filled(center, radius*self._inner_hole_ratio, imgui.get_color_u32(imgui_utils.Colors.background))
-            draw.add_circle(center, radius*self._inner_hole_ratio, imgui.get_color_u32(self._frame_color), thickness=self._frame_thickness)
-        draw.add_circle(center, radius, imgui.get_color_u32(self._frame_color), thickness=self._frame_thickness)
+            draw.add_circle_filled(center, radius*self._inner_hole_ratio, Colors.background.u32)
+            draw.add_circle(center, radius*self._inner_hole_ratio, self._frame_color.u32, thickness=self._frame_thickness)
+        draw.add_circle(center, radius, self._frame_color.u32, thickness=self._frame_thickness)
 
     # Method Overrides
     def render(self):

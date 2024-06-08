@@ -1,8 +1,11 @@
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import ContainerWidget, Slot
-from nimbus.utils.imgui_widgets.corner import Corner, CornerType
-from nimbus.utils.imgui_widgets.rect import Rect
-from imgui_bundle import imgui, ImVec2, ImVec4
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import ContainerWidget, Slot
+from nimbus.utils.imgui.widgets.corner import Corner, CornerType
+from nimbus.utils.imgui.widgets.rect import Rect
+from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.colors import Color
+from nimbus.utils.imgui.general import menu_item
+from imgui_bundle import imgui
 from enum import Flag, auto
 
 
@@ -66,7 +69,7 @@ class Panel(ContainerWidget):
             self._slots.append(border)
 
     # Editable Properties
-    @imgui_utils.enum_property(PanelBorders)
+    @types.enum_property(PanelBorders)
     def borders_type(self) -> PanelBorders:
         """Which borders to enable on this panel. [GET/SET]"""
         return self._borders_type
@@ -75,7 +78,7 @@ class Panel(ContainerWidget):
     def borders_type(self, value: PanelBorders):
         self._borders_type = value
 
-    @imgui_utils.float_property()
+    @types.float_property()
     def out_margin(self) -> float:
         """The margin of the borders/corners to the edges of our slot's available area."""
         return self._out_margin
@@ -84,7 +87,7 @@ class Panel(ContainerWidget):
     def out_margin(self, value: float):
         self._out_margin = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def border_width_ratio(self):
         """The ratio of our available horizontal space that is used as the width for each of the LEFT/RIGHT borders. [GET/SET]
 
@@ -97,7 +100,7 @@ class Panel(ContainerWidget):
     def border_width_ratio(self, value: float):
         self._border_width_ratio = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def border_height_ratio(self):
         """The ratio of our available vertical space that is used as the height for each of the TOP/BOTTOM borders. [GET/SET]
 
@@ -110,7 +113,7 @@ class Panel(ContainerWidget):
     def border_height_ratio(self, value: float):
         self._border_height_ratio = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def corner_inner_radius_ratio(self) -> float:
         return self._corner_inner_radius_ratio
 
@@ -118,7 +121,7 @@ class Panel(ContainerWidget):
     def corner_inner_radius_ratio(self, value: float):
         self._corner_inner_radius_ratio = value
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def use_absolute_values(self):
         """If our border width/height ratios are absolute values instead of ratios to our area size. [GET/SET]"""
         return self._use_absolute_values
@@ -127,7 +130,7 @@ class Panel(ContainerWidget):
     def use_absolute_values(self, value: bool):
         self._use_absolute_values = value
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def color_border_childs(self) -> bool:
         """If True, when updating our ``border_color`` property, it'll also set the ``color`` property of any child in the borders."""
         return self._color_border_childs
@@ -136,13 +139,13 @@ class Panel(ContainerWidget):
     def color_border_childs(self, value: bool):
         self._color_border_childs = value
 
-    @imgui_utils.color_property()
+    @types.color_property()
     def border_color(self):
         """The color of the borders and corners. [GET/SET]"""
         return self.corners[0].color
 
     @border_color.setter
-    def border_color(self, value: ImVec4):
+    def border_color(self, value: Color):
         for corner in self.corners:
             corner.color = value
         for border in self.borders.values():
@@ -151,7 +154,7 @@ class Panel(ContainerWidget):
                 if hasattr(border.child, "color"):
                     setattr(border.child, "color", value)
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def outline_borders(self) -> bool:
         """If a thin outline will be rendered, showing the area of the borders. [GET/SET]"""
         return self.borders[PanelBorders.TOP].draw_area_outline
@@ -165,7 +168,7 @@ class Panel(ContainerWidget):
     @property
     def border_size(self):
         """Base real size of borders, from our settings [GET]"""
-        size = imgui_utils.Vector2(self._border_width_ratio, self._border_height_ratio)
+        size = Vector2(self._border_width_ratio, self._border_height_ratio)
         if not self._use_absolute_values:
             size *= self._area
         return size
@@ -217,7 +220,7 @@ class Panel(ContainerWidget):
 
     def _update_corner(self, corner: Corner):
         """Updates our given child corner."""
-        margin_vec = imgui_utils.Vector2(self._out_margin, self._out_margin)
+        margin_vec = Vector2(self._out_margin, self._out_margin)
         size = self.corner_size
         pos = self._pos.copy()
         if corner.type == CornerType.TOP_RIGHT:
@@ -310,7 +313,7 @@ class Panel(ContainerWidget):
         imgui.spacing()
         imgui.separator_text("Commands")
         imgui.spacing()
-        if imgui_utils.menu_item("Fill Borders with Rects"):
+        if menu_item("Fill Borders with Rects"):
             self.fill_borders_with_rects()
         imgui.set_item_tooltip(self.fill_borders_with_rects.__doc__)
 
@@ -320,7 +323,7 @@ class Panel(ContainerWidget):
             slot.child.system = self.system
 
     # Dynamic Editor Updaters
-    def _update_border_width_ratio_editor(self, editor: imgui_utils.FloatEditor):
+    def _update_border_width_ratio_editor(self, editor: types.FloatEditor):
         """Method automatically called by our ``border_width_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
@@ -328,7 +331,7 @@ class Panel(ContainerWidget):
         else:
             editor.max = 1.0
 
-    def _update_border_height_ratio_editor(self, editor: imgui_utils.FloatEditor):
+    def _update_border_height_ratio_editor(self, editor: types.FloatEditor):
         """Method automatically called by our ``border_height_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
@@ -336,7 +339,7 @@ class Panel(ContainerWidget):
         else:
             editor.max = 1.0
 
-    def _update_corner_inner_radius_ratio_editor(self, editor: imgui_utils.FloatEditor):
+    def _update_corner_inner_radius_ratio_editor(self, editor: types.FloatEditor):
         """Method automatically called by our ``corner_inner_radius_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:

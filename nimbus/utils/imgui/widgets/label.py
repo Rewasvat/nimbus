@@ -1,7 +1,8 @@
 import re
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import LeafWidget
-from imgui_bundle import imgui, ImVec2, ImVec4
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.colors import Colors, Color
+from imgui_bundle import imgui, ImVec2
 from enum import Enum
 
 
@@ -24,12 +25,12 @@ class TextMixin:
 
     def __init__(self, text: str = ""):
         self._text = text
-        self._text_color = imgui_utils.Colors.white
+        self._text_color = Colors.white
         self._wrapped = False
         self._align: TextAlignment = TextAlignment.CENTER
         self._scale: float = 1.0
 
-    @imgui_utils.string_property()
+    @types.string_property()
     def text(self):
         """The text being displayed [GET/SET]"""
         return self._text
@@ -38,16 +39,16 @@ class TextMixin:
     def text(self, value: str):
         self._text = value
 
-    @imgui_utils.color_property()
+    @types.color_property()
     def text_color(self):
         """The color of the text [GET/SET]"""
         return self._text_color
 
     @text_color.setter
-    def text_color(self, value: ImVec4):
+    def text_color(self, value: Color):
         self._text_color = value
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def is_wrapped(self):
         """If the text will wrap around to not exceed our available width space [GET/SET]"""
         return self._wrapped
@@ -56,7 +57,7 @@ class TextMixin:
     def is_wrapped(self, value: bool):
         self._wrapped = value
 
-    @imgui_utils.enum_property(TextAlignment)
+    @types.enum_property(TextAlignment)
     def align(self):
         """How the text is aligned to our area [GET/SET]"""
         return self._align
@@ -65,7 +66,7 @@ class TextMixin:
     def align(self, value: TextAlignment):
         self._align = value
 
-    @imgui_utils.float_property(min=0.0, max=2.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(min=0.0, max=2.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def scale(self):
         """The scale of the text. [GET/SET]
         * 0 (min): impossible. Since we can't have scale=0, at this value scale will behave as if it was =1.
@@ -112,7 +113,7 @@ class TextMixin:
                 font=font,
                 font_size=font_height*actual_scale,
                 pos=text_pos,
-                col=imgui.get_color_u32(self.text_color),
+                col=self.text_color.u32,
                 text_begin=text,
                 text_end=None,
                 wrap_width=wrap_width,

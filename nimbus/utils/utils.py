@@ -278,3 +278,18 @@ def get_connected_device_ip():
     except Exception as e:
         click.secho(f"[ADB] Unexpected error ({type(e)}): {e}", fg="red")
     return None
+
+
+def get_all_properties(cls: type) -> dict[str, property]:
+    """Gets all ``@property``s of a class. This includes properties of parent classes.
+
+    Args:
+        cls (type): The class to get the properties from.
+
+    Returns:
+        dict[str, property]: a "property name" => "property object" dict with all properties.
+    """
+    props = {}
+    for kls in reversed(cls.mro()):
+        props.update({key: value for key, value in kls.__dict__.items() if isinstance(value, property)})
+    return props

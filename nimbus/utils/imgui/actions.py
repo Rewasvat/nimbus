@@ -2,8 +2,11 @@ import click
 import inspect
 import traceback
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui import Node, NodePin, NodeLink, Colors, Vector2
+from nimbus.utils.utils import get_all_properties
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor
+from nimbus.utils.imgui.colors import Colors
+from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.general import menu_item, not_user_creatable
 
 
 class ActionFlow(NodePin):
@@ -25,7 +28,7 @@ class ActionFlow(NodePin):
             imgui.text_unformatted(self.name)
         draw = imgui.get_window_draw_list()
         size = imgui.get_text_line_height()
-        p1 = imgui_utils.Vector2.from_cursor_screen_pos()
+        p1 = Vector2.from_cursor_screen_pos()
         draw.path_line_to(p1)
         draw.path_line_to(p1 + (size * 0.6, 0))
         draw.path_line_to(p1 + (size, size * 0.5))
@@ -42,7 +45,7 @@ class ActionFlow(NodePin):
         if self.pin_kind == imgui_node_editor.PinKind.input:
             imgui.text_unformatted(self.name)
 
-    def can_link_to(self, pin: imgui_utils.NodePin) -> tuple[bool, str]:
+    def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
         if not ok:
             return ok, msg
@@ -73,7 +76,7 @@ class ActionFlow(NodePin):
 
     def render_edit_details(self):
         # TODO: THIS IS FOR TESTING! DELETE THIS AFTERWARDS
-        if imgui_utils.menu_item("Trigger"):
+        if menu_item("Trigger"):
             self.trigger()
 
     def __str__(self):
@@ -117,7 +120,7 @@ class DataPin(NodePin):
         if self.pin_kind == imgui_node_editor.PinKind.input:
             imgui.text_unformatted(self.name)
 
-    def can_link_to(self, pin: imgui_utils.NodePin) -> tuple[bool, str]:
+    def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
         if not ok:
             return ok, msg
@@ -247,7 +250,7 @@ def create_data_pins_from_properties(node: Node):
         tuple[list[DataPin], list[DataPin]]: a (inputs, outputs) tuple, where each item is a list of
         DataPins for that kind of pin. Lists might be empty if the node has no properties of that kind.
     """
-    props = imgui_utils.get_all_properties(type(node))
+    props = get_all_properties(type(node))
     inputs: list[DataPin] = []
     outputs: list[DataPin] = []
     for name, prop in props.items():
@@ -262,13 +265,13 @@ def create_data_pins_from_properties(node: Node):
     return inputs, outputs
 
 
-@imgui_utils.not_user_creatable
+@not_user_creatable
 class Action(Node):
     """TODO"""
 
     def __init__(self):
         super().__init__()
-        self.editor: imgui_utils.NodeEditor = None
+        self.editor: NodeEditor = None
         self._inputs: list[NodePin] = [ActionFlow(self, imgui_node_editor.PinKind.input, "Execute")]
         """List of input pins of this action node."""
         self._outputs: list[NodePin] = [ActionFlow(self, imgui_node_editor.PinKind.output, "Trigger")]

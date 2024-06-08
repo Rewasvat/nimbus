@@ -1,11 +1,12 @@
 import math
 import click
-import traceback
-import nimbus.utils.imgui as imgui_utils
+import nimbus.monitor.sensors as sensors
 import nimbus.utils.command_utils as cmd_utils
 import nimbus.utils.utils as utils
+import nimbus.utils.imgui.windows as windows
+import nimbus.utils.imgui.general as imgui_utils
+from nimbus.utils.imgui.colors import Colors
 from nimbus.data import DataCache
-import nimbus.monitor.sensors as sensors
 from imgui_bundle import imgui
 
 
@@ -84,7 +85,7 @@ class MonitorAppData:
         cache.set_data("monitor_data", self)
 
 
-class MonitorApp(imgui_utils.AppWindow):
+class MonitorApp(windows.AppWindow):
     """System Monitor App.
 
     This is the main System Monitor App Window, opened by the ``monitor open`` command.
@@ -101,7 +102,7 @@ class MonitorApp(imgui_utils.AppWindow):
     # TODO: arrumar save dos settings da imgui: parece que não ta salvando mudancas de theme, config das colunas da table, e mais umas coisinhas assim
 
     def __init__(self):
-        super().__init__("System Monitor", imgui_utils.RunnableAppMode.SIMPLE)
+        super().__init__("System Monitor", windows.RunnableAppMode.SIMPLE)
         self.monitor = MonitorManager()
         self.data: MonitorAppData = MonitorAppData()
         self.elapsed_time: float = 0
@@ -152,7 +153,7 @@ class MonitorApp(imgui_utils.AppWindow):
 
                 imgui.table_next_column()
                 imgui.text(sensor.name)
-                imgui.push_style_color(imgui.Col_.text, imgui_utils.Colors.white)
+                imgui.push_style_color(imgui.Col_.text, Colors.white)
                 self._draw_sensor_context_menu(sensor)
                 imgui.pop_style_color()
 
@@ -299,29 +300,29 @@ class MonitorApp(imgui_utils.AppWindow):
         imgui.end_popup()
 
 
-class WidgetsTestApp(imgui_utils.AppWindow):
+class WidgetsTestApp(windows.AppWindow):
     """TODO teste pro sistema de Widgets, talvez deletar depois?"""
 
     def __init__(self):
-        super().__init__("Widgets Test", imgui_utils.RunnableAppMode.SIMPLE)
+        super().__init__("Widgets Test", windows.RunnableAppMode.SIMPLE)
         self.show_app_menu = False
         self.show_menu_bar = False
         self.show_status_bar = False
         self.enable_viewports = True
-        from nimbus.utils.imgui_widgets import WidgetSystem
+        from nimbus.utils.imgui.widgets import WidgetSystem
         self.root = WidgetSystem("Test")
         self.elapsed = 0.0
         self.create_contents()
 
     def create_contents(self):
-        from nimbus.utils.imgui_widgets import Board, AxisList, Rect, Label, Corner, Panel, ProgressBar
+        from nimbus.utils.imgui.widgets import Board, AxisList, Rect, Label, Corner, Panel, ProgressBar
         pnl = Panel()
         self.root.register_widget(pnl)
 
         brd = Board(["Default", "Other"])
         pnl.content.child = brd
 
-        other = Rect(imgui_utils.Colors.purple)
+        other = Rect(Colors.purple)
         other.is_top_rounded = other.is_bottom_rounded = other.is_left_rounded = other.is_right_rounded = True
         other.name = "OtherStuff"
         brd.get_slot("Other").child = other
@@ -332,14 +333,14 @@ class WidgetsTestApp(imgui_utils.AppWindow):
         brd.get_slot("Default").child = list1
         brd.selected_name = "Default"
 
-        # r1 = Rect(imgui_utils.Colors.red)
+        # r1 = Rect(Colors.red)
         # r1.is_bottom_rounded = True
-        # r2 = Rect(imgui_utils.Colors.green)
+        # r2 = Rect(Colors.green)
         # r2.is_top_rounded = True
-        r3 = Rect(imgui_utils.Colors.blue)
+        r3 = Rect(Colors.blue)
         r3.name = "BlueRect"
         r3.is_left_rounded = True
-        r4 = Rect(imgui_utils.Colors.yellow)
+        r4 = Rect(Colors.yellow)
         r4.name = "YellowRect"
         r4.is_right_rounded = True
 

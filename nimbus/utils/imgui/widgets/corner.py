@@ -1,7 +1,8 @@
-import math
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import LeafWidget
-from imgui_bundle import imgui, ImVec2, ImVec4
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.colors import Colors, Color
+from nimbus.utils.imgui.math import Vector2
+from imgui_bundle import imgui
 from enum import Enum
 
 
@@ -28,9 +29,9 @@ class Corner(LeafWidget):
         self._width_ratio: float = 0.5
         self._height_ratio: float = 0.5
         self._use_absolute_values: bool = False
-        self._color = imgui_utils.Colors.white
+        self._color = Colors.white
 
-    @imgui_utils.enum_property(CornerType)
+    @types.enum_property(CornerType)
     def type(self) -> CornerType:
         """The type of this corner [GET/SET]"""
         return self._type
@@ -39,7 +40,7 @@ class Corner(LeafWidget):
     def type(self, value: CornerType):
         self._type = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def width_ratio(self):
         """The ratio of our available horizontal space that is used as the corner column width. [GET/SET]
 
@@ -52,7 +53,7 @@ class Corner(LeafWidget):
     def width_ratio(self, value: float):
         self._width_ratio = value
 
-    @imgui_utils.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def height_ratio(self):
         """The ratio of our available vertical space that is used as the corner bar height. [GET/SET]
 
@@ -65,7 +66,7 @@ class Corner(LeafWidget):
     def height_ratio(self, value: float):
         self._height_ratio = value
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def use_absolute_values(self):
         """If our width/height ratios are absolute values instead of ratios to our area size. [GET/SET]"""
         return self._use_absolute_values
@@ -74,13 +75,13 @@ class Corner(LeafWidget):
     def use_absolute_values(self, value: bool):
         self._use_absolute_values = value
 
-    @imgui_utils.color_property()
-    def color(self):
+    @types.color_property()
+    def color(self) -> Color:
         """The color of the corner [GET/SET]"""
         return self._color
 
     @color.setter
-    def color(self, value: ImVec4):
+    def color(self, value: Color):
         self._color = value
 
     @property
@@ -90,13 +91,13 @@ class Corner(LeafWidget):
         * `size.x`: represents the corner column's width - the horizontal space taken by the corner when going up/down.
         * `size.y`: represents the corner bar's height - the vertical space taken by the corner when going left/right.
         """
-        size = imgui_utils.Vector2(self._width_ratio, self._height_ratio)
+        size = Vector2(self._width_ratio, self._height_ratio)
         if not self._use_absolute_values:
             size *= self._area
         return size
 
     @property
-    def top_bar_pos(self) -> imgui_utils.Vector2:
+    def top_bar_pos(self) -> Vector2:
         """The position of the top corner-point of the bar that would extend horizontally from this corner. [GET]"""
         if self._type == CornerType.TOP_LEFT:
             return self.top_right_pos
@@ -108,12 +109,12 @@ class Corner(LeafWidget):
             return self.bottom_right_pos - (0, self.size.y)
 
     @property
-    def bottom_bar_pos(self) -> imgui_utils.Vector2:
+    def bottom_bar_pos(self) -> Vector2:
         """The position of the bottom corner-point of the bar that would extend horizontally from this corner. [GET]"""
         return self.top_bar_pos + (0, self.size.y)
 
     @property
-    def left_column_pos(self) -> imgui_utils.Vector2:
+    def left_column_pos(self) -> Vector2:
         """The position of the left corner-point of the column that would extend vertically from this corner. [GET]"""
         if self._type == CornerType.TOP_LEFT:
             return self.bottom_left_pos
@@ -125,12 +126,12 @@ class Corner(LeafWidget):
             return self._pos.copy()
 
     @property
-    def right_column_pos(self) -> imgui_utils.Vector2:
+    def right_column_pos(self) -> Vector2:
         """The position of the right corner-point of the column that would extend vertically from this corner. [GET]"""
         return self.left_column_pos + (self.size.x, 0)
 
     @property
-    def inner_curve_center_pos(self) -> imgui_utils.Vector2:
+    def inner_curve_center_pos(self) -> Vector2:
         """Gets the position of the center of the inner curve's circle [GET]"""
         if self._type == CornerType.TOP_LEFT:
             pos = self.position
@@ -151,16 +152,16 @@ class Corner(LeafWidget):
         return min(*rest)
 
     @property
-    def corner_direction(self) -> imgui_utils.Vector2:
+    def corner_direction(self) -> Vector2:
         """Gets the normalized direction vector pointing away from this corner. Should be at an 45deg angle in 2D. [GET]"""
         if self._type == CornerType.TOP_LEFT:
-            dir = imgui_utils.Vector2(-1, -1)
+            dir = Vector2(-1, -1)
         elif self._type == CornerType.TOP_RIGHT:
-            dir = imgui_utils.Vector2(1, -1)
+            dir = Vector2(1, -1)
         elif self._type == CornerType.BOTTOM_RIGHT:
-            dir = imgui_utils.Vector2(1, 1)
+            dir = Vector2(1, 1)
         elif self._type == CornerType.BOTTOM_LEFT:
-            dir = imgui_utils.Vector2(-1, 1)
+            dir = Vector2(-1, 1)
         dir.normalize()
         return dir
 
@@ -195,9 +196,8 @@ class Corner(LeafWidget):
             small_start = pos + (size.x, 0)
             small_end = pos + (self._area.x, rest.y)
 
-        col = imgui.get_color_u32(self.color)
-        draw.add_rect_filled(pos, pos + self._area, col, big, flags)
-        draw.add_rect_filled(small_start, small_end, imgui.get_color_u32(imgui_utils.Colors.background), small, flags)
+        draw.add_rect_filled(pos, pos + self._area, self.color.u32, big, flags)
+        draw.add_rect_filled(small_start, small_end, Colors.background.u32, small, flags)
 
     @classmethod
     def get_min_area(cls, width: float, height: float, small: float):
@@ -215,9 +215,9 @@ class Corner(LeafWidget):
             Vector2: size vector depicting the width/height of an area to drawn a Corner with the given desired
             values.
         """
-        return imgui_utils.Vector2(width+small, height+small)
+        return Vector2(width+small, height+small)
 
-    def _update_width_ratio_editor(self, editor: imgui_utils.FloatEditor):
+    def _update_width_ratio_editor(self, editor: types.FloatEditor):
         """Method automatically called by our ``width_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
@@ -225,7 +225,7 @@ class Corner(LeafWidget):
         else:
             editor.max = 1.0
 
-    def _update_height_ratio_editor(self, editor: imgui_utils.FloatEditor):
+    def _update_height_ratio_editor(self, editor: types.FloatEditor):
         """Method automatically called by our ``height_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:

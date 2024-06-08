@@ -1,6 +1,7 @@
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import BaseWidget, LeafWidget, ContainerWidget, Slot
-from imgui_bundle import imgui, ImVec2
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import BaseWidget, LeafWidget, ContainerWidget, Slot
+from nimbus.utils.imgui.math import Vector2
+from imgui_bundle import imgui
 
 
 class AxisListSlot(Slot):
@@ -13,7 +14,7 @@ class AxisListSlot(Slot):
         super().__init__(parent, name)
         self._slice = 1.0
 
-    @imgui_utils.float_property(min=1, flags=imgui.SliderFlags_.always_clamp)
+    @types.float_property(min=1, flags=imgui.SliderFlags_.always_clamp)
     def slice(self) -> float:
         """The 'slice' of this slot. [GET/SET]
 
@@ -51,7 +52,7 @@ class AxisList(ContainerWidget):
         self._margin: float = 0.0
         self._only_accept_leafs = False
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def only_accept_leafs(self) -> bool:
         """If this List only accepts LeafWidgets as children, otherwise accept any BaseWidget. Default is false. [GET/SET]"""
         return self._only_accept_leafs
@@ -65,7 +66,7 @@ class AxisList(ContainerWidget):
             else:
                 slot.accepted_child_types = [BaseWidget]
 
-    @imgui_utils.float_property()
+    @types.float_property()
     def margin(self) -> float:
         """The space between each children, and between the children and our borders. Default is 0. [GET/SET]"""
         return self._margin
@@ -74,7 +75,7 @@ class AxisList(ContainerWidget):
     def margin(self, value: float):
         self._margin = value
 
-    @imgui_utils.bool_property()
+    @types.bool_property()
     def is_horizontal(self) -> bool:
         """If this list orders its children horizontally. If not, it'll order them vertically. Default is vertical. [GET/SET]"""
         return self._is_horizontal
@@ -115,11 +116,11 @@ class AxisList(ContainerWidget):
             size = piece_size * slice_size
 
             if self._is_horizontal:
-                slot_pos = imgui_utils.Vector2(pos, self._margin)
-                slot_size = imgui_utils.Vector2(size, self._area.y - self._margin*2)
+                slot_pos = Vector2(pos, self._margin)
+                slot_size = Vector2(size, self._area.y - self._margin*2)
             else:
-                slot_pos = imgui_utils.Vector2(self._margin, pos)
-                slot_size = imgui_utils.Vector2(self._area.x - self._margin*2, size)
+                slot_pos = Vector2(self._margin, pos)
+                slot_size = Vector2(self._area.x - self._margin*2, size)
             slot_size = slot_size.max((10, 10))
 
             slot._name = f"#{i+1}"

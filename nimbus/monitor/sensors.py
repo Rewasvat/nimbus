@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from typing import Iterator
 from imgui_bundle import ImVec2
 from nimbus.monitor.native_api import SensorType, all_sensor_types, ISensor, Computer
-import nimbus.utils.imgui as imgui_utils
+import nimbus.utils.imgui.math as math_utils
+from nimbus.utils.imgui.colors import Colors
 
 
 # Local implementation of classes wrapping C# types.
@@ -564,35 +565,35 @@ class Sensor:
         targets = None
         if self.unit in (SensorUnit.PERCENT, SensorUnit.FAN):
             targets = [
-                (imgui_utils.Colors.purple, 0),
-                (imgui_utils.Colors.green, 0.0001),
-                (imgui_utils.Colors.white, 0.5),
-                (imgui_utils.Colors.yellow, 0.75),
-                (imgui_utils.Colors.red, 1),
+                (Colors.purple, 0),
+                (Colors.green, 0.0001),
+                (Colors.white, 0.5),
+                (Colors.yellow, 0.75),
+                (Colors.red, 1),
             ]
         elif self.unit in (SensorUnit.TEMPERATURE, ):
             targets = [
-                (imgui_utils.Colors.red, 0),
-                (imgui_utils.Colors.green, 0.001),
-                (imgui_utils.Colors.white, 0.5),
-                (imgui_utils.Colors.yellow, 0.75),
-                (imgui_utils.Colors.red, 1),
+                (Colors.red, 0),
+                (Colors.green, 0.001),
+                (Colors.white, 0.5),
+                (Colors.yellow, 0.75),
+                (Colors.red, 1),
             ]
         elif self.unit in (SensorUnit.POWER, SensorUnit.VOLTAGE, SensorUnit.CURRENT):
             targets = [
-                (imgui_utils.Colors.green, 0),
-                (imgui_utils.Colors.white, 0.5),
-                (imgui_utils.Colors.yellow, 0.75),
-                (imgui_utils.Colors.red, 1),
+                (Colors.green, 0),
+                (Colors.white, 0.5),
+                (Colors.yellow, 0.75),
+                (Colors.red, 1),
             ]
         elif self.unit in (SensorUnit.THROUGHPUT, SensorUnit.CLOCK):
             targets = [
-                (imgui_utils.Colors.white, 0),
-                (imgui_utils.Colors.white, 0.5),
-                (imgui_utils.Colors.yellow, 0.75),
-                (imgui_utils.Colors.red, 1),
+                (Colors.white, 0),
+                (Colors.white, 0.5),
+                (Colors.yellow, 0.75),
+                (Colors.red, 1),
             ]
 
         if targets is not None:
-            return imgui_utils.multiple_lerp_with_weigths(targets, self.get_percent_of_value(value))
-        return imgui_utils.Colors.white
+            return math_utils.multiple_lerp_with_weigths(targets, self.get_percent_of_value(value))
+        return Colors.white

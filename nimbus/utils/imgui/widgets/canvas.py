@@ -1,6 +1,7 @@
-import nimbus.utils.imgui as imgui_utils
-from nimbus.utils.imgui_widgets.base import BaseWidget, ContainerWidget, Slot
-from imgui_bundle import imgui, ImVec2, ImVec4
+import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.widgets.base import ContainerWidget, Slot
+from nimbus.utils.imgui.math import Vector2
+from imgui_bundle import imgui
 
 
 # TODO: permitir drag&drop pra alterar pos dos slots no canvas
@@ -13,10 +14,10 @@ class CanvasSlot(Slot):
 
     def __init__(self, parent: ContainerWidget, name: str):
         super().__init__(parent, name)
-        self.pos_ratio: imgui_utils.Vector2 = imgui_utils.Vector2()
-        self.size_ratio: imgui_utils.Vector2 = imgui_utils.Vector2(0.5, 0.5)
+        self.pos_ratio: Vector2 = Vector2()
+        self.size_ratio: Vector2 = Vector2(0.5, 0.5)
 
-    @imgui_utils.string_property(imgui.InputTextFlags_.enter_returns_true)
+    @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
         """Name of this slot. User can change this, but it should be unique amongst all slots of this container. [GET/SET]"""
         return self._name
@@ -25,22 +26,22 @@ class CanvasSlot(Slot):
     def name(self, value):
         self._name = value
 
-    @imgui_utils.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
-    def position(self) -> imgui_utils.Vector2:
+    @types.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
+    def position(self) -> Vector2:
         """The position of the slot, as a ratio of the canvas's size. [GET/SET]"""
         return self.pos_ratio
 
     @position.setter
-    def position(self, value: imgui_utils.Vector2):
+    def position(self, value: Vector2):
         self.pos_ratio = value
 
-    @imgui_utils.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
-    def size(self) -> imgui_utils.Vector2:
+    @types.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
+    def size(self) -> Vector2:
         """The size of the slot, as a ratio of the canvas's size. [GET/SET]"""
         return self.size_ratio
 
     @size.setter
-    def size(self, value: imgui_utils.Vector2):
+    def size(self, value: Vector2):
         self.size_ratio = value
 
 
