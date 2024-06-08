@@ -2,6 +2,7 @@ import click
 from typing import Iterator
 from imgui_bundle import imgui, ImVec2, ImVec4, imgui_node_editor  # type: ignore
 import nimbus.utils.imgui as imgui_utils
+import nimbus.utils.imgui_widgets.actions as actions
 
 
 def insert_base_init(sub_cls: type, base_cls: type):
@@ -20,22 +21,6 @@ def insert_base_init(sub_cls: type, base_cls: type):
         if cls_init is not None:
             cls_init(self, *args, **kwargs)
     sub_cls.__init__ = new_init
-
-
-def not_user_creatable(cls):
-    """Class-decorator to mark a Widget class as being "Not User Creatable".
-
-    Which means the user won't be able to create a instance of this class using the runtime menu options.
-    However, subclasses of this class will still show up in the widget-creation menu. This decorator only affects
-    this class, repeat it on subclasses to disable user-creation of those as well."""
-    if not hasattr(cls, "__class_tags"):
-        cls.__class_tags = {}
-    if cls.__name__ not in cls.__class_tags:
-        # We need this since this attribute on a class would be inherited by subclasses.
-        # We want each class to define the tag just on itself.
-        cls.__class_tags[cls.__name__] = {}
-    cls.__class_tags[cls.__name__]["not_user_creatable"] = True
-    return cls
 
 
 def draw_widget_pin_icon(is_filled):
@@ -72,7 +57,7 @@ class WidgetParentPin(imgui_utils.NodePin):
         return f"{self.parent_node} Parent Slot"
 
 
-@not_user_creatable
+@imgui_utils.not_user_creatable
 class BaseWidget(imgui_utils.Node):
     """Abstract Base Widget Class.
 
@@ -104,12 +89,6 @@ class BaseWidget(imgui_utils.Node):
         self.enabled = True
         """If this widget is enabled. Disabled widgets are not rendered by their parents."""
         self.parent_pin = WidgetParentPin(self)
-
-    @classmethod
-    def is_user_creatable(cls):
-        cls_tags = getattr(cls, "__class_tags", {})
-        my_tags = cls_tags.get(cls.__name__, {})
-        return not my_tags.get("not_user_creatable", False)
 
     @property
     def id(self):
@@ -309,7 +288,7 @@ class BaseWidget(imgui_utils.Node):
         return f"{self.id}:{self.name}"
 
 
-@not_user_creatable
+@imgui_utils.not_user_creatable
 class LeafWidget(BaseWidget):
     """Abstract Base Leaf Widget.
 
@@ -517,7 +496,7 @@ class Slot(imgui_utils.NodePin):
 
 
 # TODO: render-edit: permitir drag&drop pra mudar ordem dos slots, arrastando eles no menu.
-@not_user_creatable
+@imgui_utils.not_user_creatable
 class ContainerWidget(BaseWidget):
     """Abstract Base Container Widget.
 
@@ -717,7 +696,7 @@ class SystemRootPin(imgui_utils.NodePin):
 
 
 class WidgetSystem(imgui_utils.Node):
-    """Root object managing a Widget hierarchy."""
+    """Root object managing a Widget and Action hierarchy."""
 
     def __init__(self, name: str):
         super().__init__()
@@ -727,7 +706,10 @@ class WidgetSystem(imgui_utils.Node):
         self.edit_enabled = True
         self.edit_window_title = "Edit Widgets System"
         self.can_be_deleted = False
-        self._output_pins = [self.root]
+        self._output_pins = [
+            self.root,
+            actions.ActionFlow(self, imgui_node_editor.PinKind.output, "Test")
+        ]
         self.node_editor = imgui_utils.NodeEditor(self.render_node_editor_context_menu)
         self.node_editor.nodes.append(self)
 
@@ -844,28 +826,47 @@ class WidgetSystem(imgui_utils.Node):
         """
         new_child = None
         for cls in accepted_bases:
-            name = cls.__name__.replace("Widget", "")
-            if cls.is_user_creatable():
-                if imgui_utils.menu_item(name):
-                    new_child = cls()
-                imgui.set_item_tooltip("Creates a Widget of this class.\n" + cls.__doc__)
-
-            subs = cls.__subclasses__()
-            if len(subs) > 0:
-                subs_opened = imgui.begin_menu(f"{name} Subtypes")
-                imgui.set_item_tooltip(cls.__doc__)
-                if subs_opened:
-                    new_child = self.render_create_widget_menu(subs)
-                    imgui.end_menu()
+            new_child = imgui_utils.object_creation_menu(cls, lambda cls: cls.__name__.replace("Widget", ""))
+            if new_child is not None:
+                break
         if new_child:
             self.register_widget(new_child)
         return new_child
 
+    def render_create_action_menu(self) -> actions.Action | None:
+        """Renders the contents for a menu that allows the user to create a new action, given the possible options.
+
+        Returns:
+            Action: the newly created instance of a action, if any. None otherwise.
+        """
+        new_action: actions.Action = imgui_utils.object_creation_menu(actions.Action)
+        if new_action:
+            self.node_editor.nodes.append(new_action)
+            new_action.editor = self.node_editor
+        return new_action
+
     def render_node_editor_context_menu(self, linked_to_pin: imgui_utils.NodePin):
+        """Context-menu contents for the node-editor's background menu.
+
+        This is used when right-clicking the editor's background or pulling a link to create a new node.
+        This is usually used as a menu to create a new node.
+
+        Args:
+            linked_to_pin (imgui_utils.NodePin): If given, this is the pin from which the user pulled a link to
+            create a new node. So it can be used to limit the contents of the menu, or of which new nodes can be created.
+            The NodeEditor will take care of properly positioning the new node and linking it to this pin.
+
+        Returns:
+            Node: the new node that was created, if any new node was created.
+        """
         if isinstance(linked_to_pin, Slot):
             return self.render_create_widget_menu(linked_to_pin.accepted_child_types)
+        if isinstance(linked_to_pin, actions.ActionFlow):
+            return self.render_create_action_menu()
         else:
-            return self.render_create_widget_menu()
+            new_widget = self.render_create_widget_menu()
+            new_action = self.render_create_action_menu()
+            return new_widget or new_action
 
     def get_output_pins(self) -> list[imgui_utils.NodePin]:
         return self._output_pins

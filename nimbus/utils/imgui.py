@@ -541,6 +541,76 @@ def enum_drop_down(value: Enum, fixed_doc: str = None, flags: imgui.SelectableFl
     return value != new_value, new_value
 
 
+def not_user_creatable(cls):
+    """Class-decorator to mark a Widget class as being "Not User Creatable".
+
+    Which means the user won't be able to create a instance of this class using the runtime menu options.
+    However, subclasses of this class will still show up in the widget-creation menu. This decorator only affects
+    this class, repeat it on subclasses to disable user-creation of those as well."""
+    if not hasattr(cls, "__class_tags"):
+        cls.__class_tags = {}
+    if cls.__name__ not in cls.__class_tags:
+        # We need this since this attribute on a class would be inherited by subclasses.
+        # We want each class to define the tag just on itself.
+        cls.__class_tags[cls.__name__] = {}
+    cls.__class_tags[cls.__name__]["not_user_creatable"] = True
+    return cls
+
+
+def is_user_creatable(cls: type):
+    """Checks if the given type is user-creatable.
+
+    That is, if the given type was marked with the ``@not_user_creatable`` decorator.
+
+    Args:
+        cls (type): type to check.
+
+    Returns:
+        bool: if the type is user creatable.
+    """
+    cls_tags = getattr(cls, "__class_tags", {})
+    my_tags = cls_tags.get(cls.__name__, {})
+    return not my_tags.get("not_user_creatable", False)
+
+
+def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
+    """Renders the contents for a menu that allows the user to create a new object, given the possible options.
+
+    * Each menu item instantiates its associated type, without passing any arguments.
+       * The created object is returned by this function.
+       * If the type has the ``@not_user_creatable`` then this button won't be available.
+    * Subclasses of a type are positioned inside a ``{name} Types`` sub-menu.
+    * Each item in the menu (creation button or sub-menu) has a tooltip with the docstring of the associated type.
+
+    Args:
+        cls (type): base type to render menu for.
+        name_getter (Callable[[type], str], optional): optional function that receives a type and returns the name of the type to display
+        in the menu. Defaults to None, which will directly use ``cls.__name__``.
+
+    Returns:
+        any: the newly created object, if any. Guaranteed a subclass of the originally given CLS.
+        None otherwise.
+    """
+    obj = None
+    name = name_getter(cls) if name_getter is not None else cls.__name__
+    if is_user_creatable(cls):
+        if menu_item(name):
+            obj = cls()
+        imgui.set_item_tooltip("Creates a object of this class.\n" + cls.__doc__)
+
+    subs = cls.__subclasses__()
+    if len(subs) > 0:
+        subs_opened = imgui.begin_menu(f"{name} Types")
+        imgui.set_item_tooltip(cls.__doc__)
+        if subs_opened:
+            for sub in subs:
+                sub_obj = object_creation_menu(sub, name_getter)
+                if sub_obj is not None:
+                    obj = sub_obj
+            imgui.end_menu()
+    return obj
+
+
 class ColorsClass:
     @property
     def red(self) -> ImVec4:
@@ -944,12 +1014,15 @@ class NodePin:
         self.pin_id = imgui_node_editor.PinId.create()
         self.pin_kind = kind
         self._links: dict[NodePin, NodeLink] = {}
+        """Dict of all links this pin have. Keys are the opposite pins, which along with us forms the link."""
         self.default_link_color: ImVec4 = Colors.white
         """Default color for link created from this pin (used when this is an output pin)."""
         self.default_link_thickness: float = 1
         """Default thickness for link lines created from this pin (used when this is an output pin)."""
         self.can_be_deleted: bool = False
         """If this object can be deleted by user-interaction."""
+        self.pin_tooltip: str = None
+        """Tooltip text to display when this pin is hovered by the user. If none, no tooltip will be displayed."""
 
     def draw_node_pin(self):
         """Draws this pin. This should be used inside a node drawing context.
@@ -959,8 +1032,11 @@ class NodePin:
         imgui_node_editor.begin_pin(self.pin_id, self.pin_kind)
         imgui.begin_horizontal(f"{repr(self)}NodePin")
         self.draw_node_pin_contents()
-        # TODO: poder ter tooltip padrão no pin?
         imgui.end_horizontal()
+        if self.pin_tooltip:
+            imgui_node_editor.suspend()
+            imgui.set_item_tooltip(self.pin_tooltip)
+            imgui_node_editor.resume()
         imgui_node_editor.end_pin()
 
     def draw_node_pin_contents(self):
