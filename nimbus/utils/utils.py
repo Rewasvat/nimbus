@@ -280,6 +280,35 @@ def get_connected_device_ip():
     return None
 
 
+class AdvProperty(property):
+    """Advanced Property: python @property with an extra ``metadata`` dict, containing values passed in the property decorator.
+
+    See the ``@adv_property`` decorator.
+    """
+
+    @property
+    def metadata(self) -> dict[str, any]:
+        """Gets the metadata dict of this property."""
+        return getattr(self, "cls_metadata", {})
+
+
+def adv_property(metadata: dict[str, any], base_prop=AdvProperty):
+    """``@adv_property`` decorator to annotate a function as a class property.
+
+    This property is used/defined in the same way as a regular python ``@property``.
+    However, this allows to pass a dict of metadata to associate with this property, and possibly change
+    the underlying property class, when using this decorator when creating the property (defining the getter).
+
+    Args:
+        metadata (dict[str, any]): dict of metadata to associate with this property.
+        base_prop (_type_, optional): Property class to use. Defaults to AdvProperty, which is our base property class
+        that supports the ``metadata`` value.
+    """
+    class SpecificAdvProperty(base_prop):
+        cls_metadata = metadata
+    return SpecificAdvProperty
+
+
 def get_all_properties(cls: type) -> dict[str, property]:
     """Gets all ``@property``s of a class. This includes properties of parent classes.
 

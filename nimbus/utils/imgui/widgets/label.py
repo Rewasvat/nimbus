@@ -57,7 +57,7 @@ class TextMixin:
     def is_wrapped(self, value: bool):
         self._wrapped = value
 
-    @types.enum_property(TextAlignment)
+    @types.enum_property()
     def align(self):
         """How the text is aligned to our area [GET/SET]"""
         return self._align

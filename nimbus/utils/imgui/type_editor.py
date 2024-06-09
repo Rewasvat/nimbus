@@ -1,13 +1,180 @@
+import inspect
+import nimbus.utils.command_utils as cmd_utils
 from enum import Enum
 from typing import Callable
 from imgui_bundle import imgui
 from nimbus.utils.imgui.math import Vector2
-from nimbus.utils.imgui.colors import Color
+from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.general import enum_drop_down, drop_down
-from nimbus.utils.utils import get_all_properties
+from nimbus.utils.utils import get_all_properties, AdvProperty, adv_property
 
 
-# TODO: mover classes de ImguiTypeEditors e afins pra outro módulo. Possivelmente pra vários outros módulos.
+# TODO: support type identifiers that are not type objects themselves. Like `list[str]` type hints and so on.
+class TypeDatabase(metaclass=cmd_utils.Singleton):
+    """Database of Python Types and their TypeEditors for visualization and editing of values in IMGUI.
+
+    NOTE: This is a singleton-class. All instances are the same, singleton instance.
+    """
+
+    def __init__(self):
+        self._types: dict[type, type[TypeEditor]] = {}
+
+    def get_editor_type(self, value_type: type):
+        """Gets the registered TypeEditor class for editing the given value type.
+
+        Args:
+            value_type (type): The type to get the editor for. This method will follow value_type's MRO,
+            until it finds a registered editor.
+
+        Returns:
+            type[TypeEditor]: A TypeEditor class that can edit the given value_type, or None
+            if no editor is registered for that type (or any of its parent classes).
+        """
+        for cls in value_type.mro():
+            if cls in self._types:
+                return self._types[cls]
+
+    def add_type_editor(self, cls: type, editor_class: type['TypeEditor']):
+        """Adds a new TypeEditor class in this database associated with the given type.
+
+        Args:
+            cls (type): The value-type that the given Editor class can edit.
+            editor_class (type[TypeEditor]): The TypeEditor class being added, that can edit the given ``cls`` type.
+        """
+        self._types[cls] = editor_class
+
+    @classmethod
+    def register_editor_for_type(cls, type_cls: type):
+        """[DECORATOR] Registers a decorated class as a TypeEditor for the given type-cls, in the TypeDatabase singleton.
+
+        Thus, for example, this can be used as the following to register a string editor:
+        ```python
+        @TypeDatabase.register_editor_for_type(str)
+        class StringEditor(TypeEditor):
+            ...
+        ```
+
+        Args:
+            type_cls (type): The value-type that the decorated Editor class can edit.
+        """
+        def decorator(editor_cls):
+            db = cls()
+            db.add_type_editor(type_cls, editor_cls)
+            return editor_cls
+        return decorator
+
+
+class ImguiProperty(AdvProperty):
+    """IMGUI Property: an Advanced Property that associates a TypeEditor with the property.
+
+    The TypeEditor can be used to render this property through IMGUI for editing. The editor's config
+    is based on this property's metadata.
+    """
+
+    def get_value_type(self, obj=None):
+        """Gets the type of this property (the type of its value).
+
+        This checks the return type-hint of the property's getter method.
+        If no return type is defined, and ``obj`` is given, this tries getting the type
+        from the actual value returned by this property.
+
+        Args:
+            obj (optional): The object that owns this property. Defaults to None (getting the type based on type-hint).
+
+        Returns:
+            type: the type of this property. In failure cases, this might be:
+            * ``inspect._empty``, if the property's getter has no return type annotation, and given ``obj`` was None.
+            * The actual type of the value returned by the property, if the getter has no return type annotation and given ``obj`` as valid.
+            This "actual type" might not be the desired/expected type of the property. For example, could be a class of some kind but value was None.
+        """
+        sig = inspect.signature(self.fget)
+        cls = sig.return_annotation
+        if cls == sig.empty and obj is not None:
+            # Try getting type from property getter return value.
+            return type(self.fget(obj))
+        return cls
+
+    def get_value_editor(self, obj=None):
+        """Gets the TypeEditor class used to edit this property value's type.
+
+        This uses uses the ``TypeDatabase`` to get the editor class for our ``self.get_value_type()``.
+
+        Args:
+            obj (optional): The object that owns this property. Defaults to None.
+
+        Returns:
+            type[TypeEditor]: a TypeEditor class that can edit the type of this property's value, or one of its parent classes.
+            If no editor is registered for our value-type (or parent types), then this will be None.
+        """
+        database = TypeDatabase()
+        return database.get_editor_type(self.get_value_type(obj))
+
+    def get_editor(self, obj):
+        """Gets the TypeEditor instance for the given object, for editing this property's value.
+
+        This property stores a table of obj->TypeEditor instance. So each object will always use the same
+        editor for its property. If the editor instance doesn't exist, one will be created with the TypeEditor
+        class returned from ``self.get_value_editor(obj)``, passing this property's metadata as argument.
+
+        Args:
+            obj (any): The object that owns this property. A property is created as part of a class, thus this object
+            is a instance of that class.
+
+        Returns:
+            TypeEditor: The TypeEditor instance for editing this property, in this object. None if the editor instance doesn't
+            exist and couldn't be created (which usually means the property's value type is undefined, or no Editor class is
+            registered for it).
+        """
+        editors = getattr(self, "_editors", {})
+        self._editors = editors
+
+        editor: TypeEditor = editors.get(obj, None)
+        editor_cls = self.get_value_editor(obj)
+        if editor is None and editor_cls is not None:
+            data = self.metadata.copy()
+            if "doc" not in data:
+                data["doc"] = self.__doc__
+            data["value_type"] = self.get_value_type(obj)
+            editor = editor_cls(data)
+            editors[obj] = editor
+        return editor
+
+    def render_editor(self, obj):
+        """Renders the TypeEditor for editing this property through IMGUI.
+
+        This gets the TypeEditor for this property and object from ``self.get_editor(obj)``, and calls its ``render_property`` method
+        to render the editor.
+        If the editor is None, display a error message in imgui instead.
+
+        Args:
+            obj (any): The object that owns this property.
+
+        Returns:
+            bool: If the property's value was changed.
+        """
+        editor = self.get_editor(obj)
+        name = self.fget.__name__
+        if editor:
+            return editor.render_property(obj, name)
+        # Failsafe if no editor for our type exists
+        imgui.text_colored(Colors.red, f"{type(obj).__name__} property '{name}': No TypeEditor exists for type '{self.get_value_type(obj)}'")
+        return False
+
+
+def imgui_property(**kwargs):
+    """Imgui Property attribute. Can be used to create imgui properties the same way as a regular @property.
+
+    A imgui-property behaves exactly the same way as a regular python @property, but also includes associated
+    metadata used to build a TypeEditor for that property's value type for each object that uses that property.
+    With this, the property's value can be easily seen or edited in IMGUI.
+
+    There are also related ``<type>_property`` decorators defined here, as an utility to setup the property metadata
+    for a specific type.
+    """
+    return adv_property(kwargs, ImguiProperty)
+
+
+# TODO: Possivelmente mover classes de editores pra vários outros módulos.
 # TODO: refatorar esse sistema pra não ser tão rigido. Usando reflection pra ler as type_hints da property
 #   pra pegar os editors certos automaticamente. Isso facilitaria muito o uso.
 #   - Ter uma classe com propriedades bem tipadas seria suficiente pra gerar os editors dela. Não precisaria hardcodar imgui_properties e tal
@@ -19,126 +186,101 @@ from nimbus.utils.utils import get_all_properties
 #   - talvez uma flag "can be None?" ou algo assim nos editors?
 #   - editores saberem o type do que eles editam, ai podiam fazer type() pra criar o valor default (isso ficaria mais facil com a refatoração com
 #     reflection definicao automatica dos editores)
-class ImguiTypeEditor:
-    """Basic class for a KEY: VALUE editor in imgui.
+class TypeEditor:
+    """Basic class for a value editor in imgui.
 
-    Subclasses of this implement how to edit a single (fixed for that class) VALUE type.
+    This allows rendering controls for editing a specific type in IMGUI, and also allows rendering
+    properties/attributes of that type using a ``key: value`` display, allowing the user to edit the value.
 
-    The ``@imgui_property()`` decorator can then be used instead of ``@property`` to mark a class' property
-    as being "renderable" using the given ImguiTypeEditor. The ``render_all_properties()`` function can then
-    be used to render all available properties in a object with their specified ImguiTypeEditors.
+    Subclasses of this represent an editor for a specific type, and thus implement the specific imgui control
+    logic for that type by overriding just the ``draw_value_editor`` method.
 
-    Subclasses should override ``__call__``.
+    The ``TypeDatabase`` singleton can be used to get the TypeEditor class for a given type, and to register
+    new editors for other types.
+
+    The ``@imgui_property(metadata)`` decorator can be used instead of ``@property`` to mark a class' property as being an
+    "Imgui Property". They have an associated TypeEditor based on the property's type, with metadata for the editor
+    passed in the decorator. When rendering, a object of the class may update its editor by having specific methods
+    (see ``update_from_obj``). The ``render_all_properties()`` function can then be used to render all available
+    ImguiProperties in a object.
+
+    Other ``@<type>_property(**args)`` decorators exist to help setting up a imgui-property by having documentation for
+    the metadata of that type.
     """
 
-    def __init__(self):
-        self._prop: property = None
+    def __init__(self, data: dict):
+        self.value_type: type = data.get("value_type")
+        """The type of our expected values."""
+        self.attr_doc = data.get("doc", "")
+        """The value's docstring, usually used as a tooltip when editing to explain that value.
+
+        When TypeEditor is created from a imgui-property, by default this value is the property's docstring.
+        """
         self.add_tooltip_after_value = True
-        """If true, ``self.draw_end()`` will add ``self.attr_doc`` as a tooltip for the last imgui control drawn."""
-        self.value_getter: Callable[[any, any], any] = getattr
-        """The "value getter" function this editor uses to get the value for editing from the object.
-        This is a ``(object, value_id) -> value`` function. It receives the object itself and a "value_id", which is any kind of
-        data used to identify the value in object, and then returns the value. The default getter function is ``getattr``, where
-        "value_id" is a ``name`` string used to access the attribute by its name.
-        """
-        self.value_setter: Callable[[any, any, any], None] = setattr
-        """The "value setter" function this editor uses to set the value in the object after editing. This is only called if the value was changed.
-        This is a ``(object, value_id, new_value) -> None`` function. It receives the object itself, a "value_id" and the new value to set.
-        The value_id is anything used to identify the value in object for setting. For attributes/properites, value_id is a string which
-        is the name of the value/property. The default value_setter is ``setattr``.
-        """
+        """If true, this will add ``self.attr_doc`` as a tooltip for the last imgui control drawn."""
+        self.color: Color = Colors.red
+        """Color of this type. Mostly used by DataPins of this type in Node Systems."""
 
-    def __call__(self, obj, name: str):
-        """Renders the KEY:VALUE editor. Usually this is a text with the given name, and imgui controls for
-        changing the value.
+    def render_property(self, obj, name: str):
+        """Renders this type editor as a KEY:VALUE editor for a ``obj.name`` property/attribute.
 
-        The default implementation in ImguiTypeEditor does the basic rendering for key:value editor by calling in order:
-        * ``self.draw_start()``: starts the drawing process and renders the "key" part.
-        * ``self.draw_value_editor(..., value=self.value_getter(obj,name))``: draws the type-specific value editing control.
-        * ``self.draw_end()``: ends the key:value editor render.
+        This also allows the object to automatically update this editor before rendering the key:value controls.
+        See ``self.update_from_obj`` (which is called from here).
 
         Args:
             obj (any): the object being updated
             name (str): the name of the attribute in object we're editing.
 
         Returns:
-            tuple[bool, any]: returns a ``(changed, new_value)`` tuple.
-            Note that ``self.draw_end()`` will already have set the new value in the parent object.
+            bool: if the property's value was changed.
+            If so, the new value was set in the object automatically.
         """
-        self.draw_start(obj, name)
-        value = self.value_getter(obj, name)
-        changed, new_value = self.draw_value_editor(obj, name, value)
-        self.draw_end(obj, name, changed, new_value)
-        return changed, new_value
-
-    def draw_value_editor(self, obj, name: str, value):
-        """Renders the controls for editing just the VALUE part of a key:value editor.
-
-        This is type-specific, and thus should be overriden by subclasses to implement their logic.
-
-        Args:
-            obj (any): the object being updated
-            name (str): the name of the attribute in object we're editing.
-            value (any): the current value of ``obj.name``.
-
-        Returns:
-            tuple[bool, any]: returns a ``(changed, new_value)`` tuple.
-        """
-        raise NotImplementedError
-
-    def set_prop(self, prop: property):
-        """Sets the property object we're attached to."""
-        self._prop = prop
-        return self
-
-    @property
-    def attr_doc(self):
-        """Gets the docstring of the property we're attached to."""
-        if self._prop is not None:
-            return self._prop.__doc__
-        return "undefined"
-
-    def draw_start(self, obj, name: str):
-        """Utility method to draw the "start" of a key:value editor.
-
-        This pushes an unique ID (based on ``obj`` and ``name``), draws ``{name}:``,
-        with a tooltip equal to our ``self.attr_doc`` and calls ``imgui.same_line()``.
-        Also calls ``self.update_from_obj(obj, name)`` to optionally update ourselves.
-
-        This setups the "key" part of a key:value editor, allowing subclasses to more easily
-        implement their custom value rendering logic by calling this, then drawing the value editing part,
-        and finally calling ``self.draw_end()``.
-
-        Args:
-            obj (any): the object being updated
-            name (str): the name of the attribute in object we're editing.
-        """
-        imgui.push_id(f"{obj}EditAttr{name}")
         self.update_from_obj(obj, name)
         imgui.text(f"{name}:")
         imgui.set_item_tooltip(self.attr_doc)
         imgui.same_line()
 
-    def draw_end(self, obj, name: str, changed: bool, new_value):
-        """Utility method to draw the "ending" of a key:value editor.
+        value = getattr(obj, name)
+        changed, new_value = self.render_value_editor(value)
+        if changed:
+            setattr(obj, name, new_value)
+        return changed
 
-        This should come after a ``self.draw_start()`` call was made and custom rendering logic
-        for editing the value was done.
+    def render_value_editor[T](self, value: T) -> tuple[bool, T]:
+        """Renders the controls for editing a value of type T, which should be the type expected by this TypeEditor instance.
 
-        This sets the attribute value in the object, and then pops the ID that was pushed
-        in ``self.draw_start()``.
+        This pushes/pops an ID from imgui's ID stack, calls ``self.draw_value_editor`` and optionally sets an item tooltip
+        for the last imgui control drawn by ``draw_value_editor`` (see ``self.add_tooltip_after_value``).
+
+        So this method wraps ``draw_value_editor`` with a few basic operations. Subclasses should NOT overwrite this, overwrite
+        ``draw_value_editor`` instead to implement their logic. This method is the one that should be used to render the type controls
+        to edit a value.
 
         Args:
-            obj (any): the object being updated
-            name (str): the name of the attribute in object we're editing.
-            changed (bool): if the value was changed
-            new_value (any): the new value for the attribute
+            value (T): the value to change.
+
+        Returns:
+            tuple[bool, T]: returns a ``(changed, new_value)`` tuple.
         """
+        imgui.push_id(f"{repr(self)}")
+        changed, new_value = self.draw_value_editor(value)
         if self.add_tooltip_after_value:
             imgui.set_item_tooltip(self.attr_doc)
-        if changed:
-            self.value_setter(obj, name, new_value)
         imgui.pop_id()
+        return changed, new_value
+
+    def draw_value_editor[T](self, value: T) -> tuple[bool, T]:
+        """Draws the controls for editing a value of type T, which should be the type expected by this TypeEditor instance.
+
+        This is type-specific, and thus should be overriden by subclasses to implement their logic.
+
+        Args:
+            value (T): the value to change.
+
+        Returns:
+            tuple[bool, T]: returns a ``(changed, new_value)`` tuple.
+        """
+        raise NotImplementedError
 
     def update_from_obj(self, obj, name: str):
         """Calls a optional ``<OBJ>._update_<NAME>_editor(self)`` method from the given object,
@@ -154,98 +296,77 @@ class ImguiTypeEditor:
             method(self)
 
 
-def imgui_property(type_editor: ImguiTypeEditor):
-    """Imgui Property attribute. Can be used to create imgui properties the same way as a regular @property.
+@TypeDatabase.register_editor_for_type(str)
+class StringEditor(TypeEditor):
+    """Imgui TypeEditor for editing a STRING value."""
 
-    A imgui-property behaves exactly the same way as a regular python @property, but also includes an associated
-    ImguiTypeEditor object that can be used to change the value of this property in imgui.
+    def __init__(self, data: dict):
+        super().__init__(data)
+        self.flags: imgui.InputTextFlags_ = data.get("flags", imgui.InputTextFlags_.none)
+        # String Enums attributes
+        self.options: list[str] = data.get("options")
+        self.docs: list[str] | dict[str, str] | None = data.get("docs")
+        self.option_flags: imgui.SelectableFlags_ = data.get("flags", 0)
+        self.add_tooltip_after_value = self.options is None
 
-    There are also related ``<type>_property`` decorators defined here, as an utility to call this passing the
-    ImguiTypeEditor for a specific type.
-    """
-    class ImguiProperty(property):
-        editor = type_editor
-    return ImguiProperty
-
-
-class StringEditor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a STRING value."""
-
-    def __init__(self, flags: imgui.InputTextFlags_ = imgui.InputTextFlags_.none):
-        super().__init__()
-        self.flags = flags
-
-    def draw_value_editor(self, obj, name: str, value: str):
-        if value is None:
-            value = ""
-        return imgui.input_text("##", value, flags=self.flags)
+    def draw_value_editor(self, value: str) -> tuple[bool, str]:
+        if self.options is None:
+            if value is None:
+                value = ""
+            return imgui.input_text("##", value, flags=self.flags)
+        else:
+            return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, flags=self.option_flags)
 
 
-def string_property(flags: imgui.InputTextFlags_ = imgui.InputTextFlags_.none):
+def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None, docs: list | dict = None, option_flags: imgui.SelectableFlags_ = 0):
     """Imgui Property attribute for a STRING type.
 
     Behaves the same way as a property, but includes a StringEditor object for allowing changing this string's value in imgui.
 
     Args:
         flags (imgui.InputTextFlags_, optional): flags to pass along to ``imgui.input_text``. Defaults to None.
+        options (list[str]): List of possible values for this string property. If given, the editor control changes to a drop-down
+        allowing the user to select only these possible values.
+        docs (list | dict, optional): Optional definition of documentation for each option, shown as a tooltip (for that option) in the editor.
+        Should be a ``list[str]`` matching the length of ``options``, or a ``{option: doc}`` dict. The property's docstring is used as a default
+        tooltip for all options.
+        option_flags (imgui.SelectableFlags_, optional): Flags passed down to the drop-down selectable.
     """
-    editor = StringEditor(flags=flags)
-    return imgui_property(editor)
+    return imgui_property(flags=flags, options=options, docs=docs, option_flags=option_flags)
 
 
-class EnumEditor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a ENUM value."""
+@TypeDatabase.register_editor_for_type(Enum)
+class EnumEditor(TypeEditor):
+    """Imgui TypeEditor for editing a ENUM value."""
 
-    def __init__(self, options: list[str] | Enum, docs: list | dict = None, is_enum_type=False, flags: imgui.SelectableFlags_ = 0):
-        """
-        Args:
-            options (list[str] | Enum): The list of possible options. This can be:
-            * A Enum type. Each item (shown by its ``name``) will be a possible option.
-            * A Enum Flags type. Works similarly to the above, but allows selecting multiple enum options at once.
-            * A ``list[str]`` (or any other iterable[str]): each string in the list will be an option.
-            * None: can be used as an shortcut for a ``Enum`` type. The Enum type is taken from the property's current value the first
-            time it is edited.
-            docs (list | dict, optional): Optional definition of documentation for each option, shown as a tooltip (for that option) in the editor
-            * Should be a ``list[str]`` matching the length of ``options``, or a ``{option: doc}`` dict.
-            * If ``options`` is a Enum type, and this is None, then this will be set as the ``value`` of each enum-item.
-            * The property's docstring is used as a default tooltip for all options.
-            is_enum_type (bool, optional): If this property is a Enum type. So the current value being edited is a Enum object. Default value is
-            if ``options`` is a Enum type.
-            flags (imgui.SelectableFlags_, optional): Flags passed down to the drop-down selectable.
-        """
-        super().__init__()
+    def __init__(self, data: dict):
+        super().__init__(data)
         self.add_tooltip_after_value = False
-        self.options = options
-        self.docs = docs
-        self.is_enum_type = is_enum_type or (isinstance(options, type) and issubclass(options, Enum))
-        self.flags = flags
+        self.flags: imgui.SelectableFlags_ = data.get("flags", 0)
 
-    def draw_value_editor(self, obj, name: str, value):
-        if self.options is None and isinstance(value, Enum):
-            self.options = type(value)
-            self.is_enum_type = True
-        if self.is_enum_type:
-            return enum_drop_down(value, self.attr_doc, self.flags)
-        else:
-            return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, flags=self.flags)
+    def draw_value_editor(self, value: str | Enum) -> tuple[bool, str | Enum]:
+        return enum_drop_down(value, self.attr_doc, self.flags)
 
 
-def enum_property(options: list[str] | Enum, docs: list | dict = None, is_enum_type=False, flags: imgui.SelectableFlags_ = 0):
+def enum_property(flags: imgui.SelectableFlags_ = 0):
     """Imgui Property attribute for a ENUM type.
 
     Behaves the same way as a property, but includes a EnumEditor object for allowing changing this enum's value in imgui.
 
     Args:
-        flags (imgui.SelectableFlags_, optional): flags to pass along to ``imgui.selectable``. Defaults to None.
+        flags (imgui.SelectableFlags_, optional): Flags passed down to the drop-down selectable.
     """
-    editor = EnumEditor(options, docs=docs, is_enum_type=is_enum_type, flags=flags)
-    return imgui_property(editor)
+    return imgui_property(flags=flags)
 
 
-class BoolEditor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a BOOLEAN value."""
+@TypeDatabase.register_editor_for_type(bool)
+class BoolEditor(TypeEditor):
+    """Imgui TypeEditor for editing a BOOLEAN value."""
 
-    def draw_value_editor(self, obj, name: str, value: bool):
+    def __init__(self, data: dict):
+        super().__init__(data)
+
+    def draw_value_editor(self, value: bool):
         return imgui.checkbox("##", value)
 
 
@@ -254,14 +375,14 @@ def bool_property():
 
     Behaves the same way as a property, but includes a BoolEditor object for allowing changing this bool's value in imgui.
     """
-    editor = BoolEditor()
-    return imgui_property(editor)
+    return imgui_property()
 
 
-class FloatEditor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a BOOLEAN value."""
+@TypeDatabase.register_editor_for_type(float)
+class FloatEditor(TypeEditor):
+    """Imgui TypeEditor for editing a BOOLEAN value."""
 
-    def __init__(self, min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, flags: imgui.SliderFlags_ = 0):
+    def __init__(self, data: dict):
         """
         Args:
             min (float, optional): Minimum allowed value for this float property. Defaults to 0.0.
@@ -273,15 +394,24 @@ class FloatEditor(ImguiTypeEditor):
             MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
             flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
         """
-        super().__init__()
-        self.is_slider: bool = is_slider
-        self.speed: float = speed
-        self.min: float = min
-        self.max: float = max
-        self.format: str = format
-        self.flags = flags
+        super().__init__(data)
+        self.is_slider: bool = data.get("is_slider", False)
+        """If the float control will be a slider to easily choose between the min/max values. Otherwise the float control will
+        be a drag-float."""
+        self.speed: float = data.get("speed", 1.0)
+        """Speed of value change when dragging the control's value. Only applies when using drag-controls (is_slider=False)"""
+        self.min: float = data.get("min", 0.0)
+        """Minimum value allowed. For proper automatic bounds in the control, ``max`` should also be defined, and be bigger than this minimum.
+        Also use the ``always_clamp`` slider flags."""
+        self.max: float = data.get("max", 0.0)
+        """Maximum value allowed. For proper automatic bounds in the control, ``min`` should also be defined, and be lesser than this maximum.
+        Also use the ``always_clamp`` slider flags."""
+        self.format: str = data.get("format", "%.2f")
+        """Format to use to convert value to display as text in the control (use python float format, such as ``%.2f``)"""
+        self.flags: imgui.SliderFlags_ = data.get("flags", 0)
+        """Slider flags to use in imgui's float control."""
 
-    def draw_value_editor(self, obj, name: str, value: float):
+    def draw_value_editor(self, value: float):
         if value is None:
             value = 0.0
         if self.is_slider:
@@ -290,7 +420,7 @@ class FloatEditor(ImguiTypeEditor):
             return imgui.drag_float("##value", value, self.speed, self.min, self.max, self.format, self.flags)
 
 
-def float_property(min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, flags: imgui.SliderFlags_ = imgui.SliderFlags_.none):
+def float_property(min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, flags: imgui.SliderFlags_ = 0):
     """Imgui Property attribute for a FLOAT type.
 
     Behaves the same way as a property, but includes a FloatEditor object for allowing changing this float's value in imgui.
@@ -305,20 +435,23 @@ def float_property(min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, 
         MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
     """
-    editor = FloatEditor(min=min, max=max, format=format, speed=speed, is_slider=is_slider, flags=flags)
-    return imgui_property(editor)
+    return imgui_property(min=min, max=max, format=format, speed=speed, is_slider=is_slider, flags=flags)
 
 
-class ColorEditor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a COLOR value."""
+@TypeDatabase.register_editor_for_type(Color)
+class ColorEditor(TypeEditor):
+    """Imgui TypeEditor for editing a COLOR value."""
 
-    def __init__(self, flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none):
-        super().__init__()
-        self.flags = flags
+    def __init__(self, data: dict):
+        # flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none
+        super().__init__(data)
+        self.flags: imgui.ColorEditFlags_ = data.get("flags", 0)
 
-    def draw_value_editor(self, obj, name: str, value: Color):
+    def draw_value_editor(self, value: Color):
         changed, new_value = imgui.color_edit4("##", value, self.flags)
-        return changed, Color(*new_value)
+        if changed:
+            value = Color(*new_value)
+        return changed, value
 
 
 def color_property(flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none):
@@ -326,15 +459,15 @@ def color_property(flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none):
 
     Behaves the same way as a property, but includes a ColorEditor object for allowing changing this color's value in imgui.
     """
-    editor = ColorEditor(flags=flags)
-    return imgui_property(editor)
+    return imgui_property(flags=flags)
 
 
-class ListEditor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a LIST value."""
+# TODO: isso ta QUEBRADO! Mas não tá sendo usado, então pode ser totalmente refatorado a vontade.
+class ListEditor(TypeEditor):
+    """Imgui TypeEditor for editing a LIST value."""
 
-    def __init__(self, item_editor: ImguiTypeEditor, default_item=None):
-        super().__init__()
+    def __init__(self, data: dict, item_editor: TypeEditor, default_item=None):
+        super().__init__(data)
         self.default_item = default_item
         self.item_editor = item_editor
         item_editor.value_getter = lambda obj, i: obj[i]
@@ -401,28 +534,20 @@ class ListEditor(ImguiTypeEditor):
         imgui.tree_pop()
 
 
-def list_property(item_editor: ImguiTypeEditor, default_item=None):
-    """Imgui Property attribute for a LIST type.
+@TypeDatabase.register_editor_for_type(Vector2)
+class Vector2Editor(TypeEditor):
+    """Imgui TypeEditor for editing a Vector2 value."""
 
-    Behaves the same way as a property, but includes a ListEditor object for allowing changing this list's value in imgui.
-    """
-    editor = ListEditor(item_editor, default_item)
-    return imgui_property(editor)
-
-
-class Vector2Editor(ImguiTypeEditor):
-    """ImguiTypeEditor for editing a Vector2 value."""
-
-    def __init__(self, x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, flags: imgui.SliderFlags_ = 0):
-        super().__init__()
-        self.speed: float = speed
-        self.format: str = format
-        self.flags = flags
-        self.x_range: Vector2 = x_range
-        self.y_range: Vector2 = y_range
+    def __init__(self, data: dict):
+        super().__init__(data)
+        self.speed: float = data.get("speed", 1.0)
+        self.format: str = data.get("format", "%.2f")
+        self.flags: imgui.SliderFlags_ = data.get("flags", 0)
+        self.x_range: Vector2 = data.get("x_range", (0, 0))
+        self.y_range: Vector2 = data.get("y_range", (0, 0))
         self.add_tooltip_after_value = False
 
-    def draw_value_editor(self, obj, name: str, value):
+    def draw_value_editor(self, value: Vector2):
         if value is None:
             value = Vector2()
         imgui.push_id("XComp")
@@ -457,11 +582,10 @@ def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, f
         speed (float, optional): Speed to apply when changing values. Only applies when dragging the value. Defaults to 1.0.
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
     """
-    editor = Vector2Editor(x_range=x_range, y_range=y_range, format=format, speed=speed, flags=flags)
-    return imgui_property(editor)
+    return imgui_property(x_range=x_range, y_range=y_range, format=format, speed=speed, flags=flags)
 
 
-def get_all_renderable_properties(cls: type) -> dict[str, ImguiTypeEditor]:
+def get_all_renderable_properties(cls: type) -> dict[str, ImguiProperty]:
     """Gets all "Imgui Properties" of a class. This includes properties of parent classes.
 
     Imgui Properties are properties with an associated ImguiTypeEditor object created with the
@@ -475,7 +599,7 @@ def get_all_renderable_properties(cls: type) -> dict[str, ImguiTypeEditor]:
         All editors returned by this will have had their "parent properties" set accordingly.
     """
     props = get_all_properties(cls)
-    return {k: v.editor.set_prop(v) for k, v in props.items() if hasattr(v, "editor")}
+    return {k: v for k, v in props.items() if isinstance(v, ImguiProperty)}
 
 
 def render_all_properties(obj, ignored_props: set[str] = None):
@@ -489,8 +613,13 @@ def render_all_properties(obj, ignored_props: set[str] = None):
         ignored_props (set[str], optional): a set (or any other object that supports ``X in IGNORED`` (contains protocol)) that indicates
         property names that we should ignore when rendering their editors. This way, if the name of a imgui-property P is in ``ignored_props``,
         its editor will not be rendered. Defaults to None (shows all properties).
+
+    Returns:
+        bool: If any property in the object was changed.
     """
     props = get_all_renderable_properties(type(obj))
-    for name, editor in props.items():
+    changed = False
+    for name, prop in props.items():
         if (ignored_props is None) or (name not in ignored_props):
-            editor(obj, name)
+            changed = prop.render_editor(obj) or changed
+    return changed

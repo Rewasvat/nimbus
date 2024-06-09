@@ -31,7 +31,7 @@ class Corner(LeafWidget):
         self._use_absolute_values: bool = False
         self._color = Colors.white
 
-    @types.enum_property(CornerType)
+    @types.enum_property()
     def type(self) -> CornerType:
         """The type of this corner [GET/SET]"""
         return self._type

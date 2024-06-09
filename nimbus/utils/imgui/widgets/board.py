@@ -45,7 +45,7 @@ class Board(ContainerWidget):
         self.on_slots_changed()
 
     @property
-    def boards(self):
+    def boards(self) -> list[str]:
         """The list of available boards. Each board is a slot for a child widget that will take up
         our full available space. However, only a single slot is visible at any one time (see ``selected_name``). [GET]"""
         return [slot.name for slot in self._slots]
@@ -55,7 +55,7 @@ class Board(ContainerWidget):
         """Gets the selected slot. [GET]"""
         return self.get_slot(self._selected_name)
 
-    @types.enum_property([], flags=imgui.SelectableFlags_.dont_close_popups)
+    @types.string_property(options=[], option_flags=imgui.SelectableFlags_.dont_close_popups)
     def selected_name(self) -> str:
         """Gets the selected name. Change this to update which slot is displayed. [GET/SET]"""
         return self._selected_name

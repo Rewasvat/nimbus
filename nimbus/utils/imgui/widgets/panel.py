@@ -69,7 +69,7 @@ class Panel(ContainerWidget):
             self._slots.append(border)
 
     # Editable Properties
-    @types.enum_property(PanelBorders)
+    @types.enum_property()
     def borders_type(self) -> PanelBorders:
         """Which borders to enable on this panel. [GET/SET]"""
         return self._borders_type

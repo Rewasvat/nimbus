@@ -72,7 +72,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     def frame_thickness(self, value: float):
         self._frame_thickness = value
 
-    @types.enum_property(BarType)
+    @types.enum_property()
     def bar_type(self) -> BarType:
         """The type of this progress bar. [GET/SET]"""
         return self._bar_type
