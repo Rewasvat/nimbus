@@ -1,11 +1,12 @@
 import click
 from typing import Iterator
-from imgui_bundle import imgui, ImVec2, imgui_node_editor  # type: ignore
+from imgui_bundle import imgui, ImVec2
 import nimbus.utils.imgui.actions as actions
 from nimbus.utils.imgui.math import Vector2, Rectangle
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.general import not_user_creatable, menu_item, object_creation_menu
-from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind
+from nimbus.utils.imgui.nodes_common import CommonNode
 import nimbus.utils.imgui.type_editor as types
 
 
@@ -51,7 +52,7 @@ class WidgetParentPin(NodePin):
     """Node Pin for a widget's parent container."""
 
     def __init__(self, parent: 'BaseWidget'):
-        super().__init__(parent, imgui_node_editor.PinKind.input)
+        super().__init__(parent, PinKind.input)
 
     def draw_node_pin_contents(self):
         draw_widget_pin_icon(self.is_linked_to_any())
@@ -62,7 +63,8 @@ class WidgetParentPin(NodePin):
 
 
 @not_user_creatable
-class BaseWidget(Node):
+@types.TypeDatabase.register_noop_editor_for_this(Colors.green)
+class BaseWidget(CommonNode):
     """Abstract Base Widget Class.
 
     Shouldn't be used on its own.
@@ -87,12 +89,15 @@ class BaseWidget(Node):
         """If this widget is editable by the user during runtime. Depends on our WidgetSystem having edit enabled."""
         self.interactive = True
         """If this widget's common user interaction (via ``self._handle_interaction()``) is enabled."""
-        self.edit_ignored_properties: set[str] = set()
+        self.edit_ignored_properties: set[str] = {"this"}
         """Set of imgui-property names that shall be ignored when rendering this widget's imgui-properties through the
         default ``self.render_edit_details()`` implementation."""
         self.enabled = True
         """If this widget is enabled. Disabled widgets are not rendered by their parents."""
         self.parent_pin = WidgetParentPin(self)
+        self._inputs.append(self.parent_pin)
+        self.node_title = None  # we want to use the str(self) default
+        self.create_data_pins_from_properties()
 
     @property
     def id(self):
@@ -143,6 +148,16 @@ class BaseWidget(Node):
     def bottom_right_pos(self):
         """The position of this widget's bottom-right corner. [GET]"""
         return self._pos + self._area
+
+    @actions.output_property()
+    def this(self):
+        """The widget itself (same as ``self``).
+
+        This is a output-property that defines a output data pin for this widget, meant
+        to use for linking in the NodeEditor, allowing passing this widget as value
+        to other nodes that accept a widget as input data (usually some actions).
+        """
+        return self
 
     def __init_subclass__(cls) -> None:
         insert_base_init(cls, BaseWidget)
@@ -321,7 +336,7 @@ class Slot(NodePin):
     for that container."""
 
     def __init__(self, parent: 'ContainerWidget', name: str):
-        super().__init__(parent, imgui_node_editor.PinKind.output)
+        super().__init__(parent, PinKind.output)
         self.parent: 'ContainerWidget' = parent  # will be the same as self.parent_node, but proper type-hint.
         self._child: BaseWidget = None
         self._name: str = name if name else f"#{parent.slot_counter}"
@@ -633,7 +648,7 @@ class ContainerWidget(BaseWidget):
         return slot
 
     def get_output_pins(self) -> list[NodePin]:
-        return self.slots
+        return self.slots + self._outputs
 
     def on_slots_changed(self):
         """Internal callback called when our list of slots changed - either adding or removing a slot.
@@ -656,7 +671,7 @@ class SystemRootPin(NodePin):
     """Node Pin for a WidgetSystem's Root widget."""
 
     def __init__(self, parent: 'WidgetSystem'):
-        super().__init__(parent, imgui_node_editor.PinKind.output)
+        super().__init__(parent, PinKind.output)
         self.parent_node: WidgetSystem = parent
         self._child: BaseWidget = None
         self.default_link_color = Colors.green  # same color used in draw_widget_pin_icon
@@ -711,7 +726,7 @@ class WidgetSystem(Node):
         self.can_be_deleted = False
         self._output_pins = [
             self.root,
-            actions.ActionFlow(self, imgui_node_editor.PinKind.output, "Test")
+            actions.ActionFlow(self, PinKind.output, "Test")
         ]
         self.node_editor = NodeEditor(self.render_node_editor_context_menu)
         self.node_editor.nodes.append(self)
@@ -845,7 +860,6 @@ class WidgetSystem(Node):
         new_action: actions.Action = object_creation_menu(actions.Action)
         if new_action:
             self.node_editor.nodes.append(new_action)
-            new_action.editor = self.node_editor
         return new_action
 
     def render_node_editor_context_menu(self, linked_to_pin: NodePin):

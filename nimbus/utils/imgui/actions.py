@@ -1,9 +1,8 @@
 import click
-import inspect
 import traceback
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
-from nimbus.utils.utils import get_all_properties
-from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor
+from nimbus.utils.imgui.nodes import Node, NodePin, PinKind
+from nimbus.utils.imgui.nodes_common import CommonNode, input_property, output_property
 from nimbus.utils.imgui.colors import Colors
 from nimbus.utils.imgui.math import Vector2
 from nimbus.utils.imgui.general import menu_item, not_user_creatable
@@ -18,13 +17,13 @@ class ActionFlow(NodePin):
     trigger the input-flow pins they're connected to, thus triggering those pin's actions.
     """
 
-    def __init__(self, parent: Node, kind: imgui_node_editor.PinKind, name="FLOW"):
+    def __init__(self, parent: Node, kind: PinKind, name="FLOW"):
         super().__init__(parent, kind)
         self.parent_node: Action = parent  # to update type-hint.
         self.name = name
 
     def draw_node_pin_contents(self):
-        if self.pin_kind == imgui_node_editor.PinKind.output:
+        if self.pin_kind == PinKind.output:
             imgui.text_unformatted(self.name)
         draw = imgui.get_window_draw_list()
         size = imgui.get_text_line_height()
@@ -42,7 +41,7 @@ class ActionFlow(NodePin):
             thickness = 2
             draw.path_stroke(color, thickness=thickness)
         imgui.dummy((size, size))
-        if self.pin_kind == imgui_node_editor.PinKind.input:
+        if self.pin_kind == PinKind.input:
             imgui.text_unformatted(self.name)
 
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
@@ -61,7 +60,7 @@ class ActionFlow(NodePin):
 
         So this executes one or more Actions, which in turn will execute other actions, thus starting a cascate of action processing.
         """
-        if self.pin_kind == imgui_node_editor.PinKind.input:
+        if self.pin_kind == PinKind.input:
             # If we are a input flow pin, we just execute our node.
             try:
                 self.parent_node.execute()
@@ -75,210 +74,41 @@ class ActionFlow(NodePin):
                 in_pin.trigger()
 
     def render_edit_details(self):
-        # TODO: THIS IS FOR TESTING! DELETE THIS AFTERWARDS
-        if menu_item("Trigger"):
+        self._draw_test_trigger_menu_item()
+
+    def _draw_test_trigger_menu_item(self):
+        """Triggers this flow pin, which will trigger linked input actions.
+
+        Those actions in turn will trigger their output flows, possibly starting a cascate of action executions.
+
+        This button is intended for testing purposes only since it only allows to trigger from a Node Editor.
+        """
+        # This is implemented as a method just to be easy to have the docstring together.
+        if menu_item("Test Trigger"):
             self.trigger()
+        imgui.set_item_tooltip(self._draw_test_trigger_menu_item.__doc__)
 
     def __str__(self):
         return f"{self.pin_kind.name.capitalize()} ActionFlow {self.name}"
 
 
-class DataPin(NodePin):
-    """A DataPin for nodes.
-
-    DataPins allows a node to send data (via output pins) to other nodes that need to receive that data as input (input pins).
-    Input data-pins also allow the node to set a default value for that pin, according to its type.
-
-    Using ``@input_property()`` or ``@output_property()`` in an Action class, it can define a property that is linked to a data-pin
-    in that action. Thus the Action can easily define and use its input/output data.
-
-    A Action, for example, using this can receive some data as input, process that data when the action is triggered, and then output
-    the result of a calculation as data for other nodes to use.
-    """
-
-    def __init__(self, parent: Node, kind: imgui_node_editor.PinKind, name: str, value_type: type, initial_value=None):
-        super().__init__(parent, kind)
-        self.name = name
-        self.value = initial_value
-        self.value_type = value_type
-        self.default_link_color = Colors.red  # TODO: parametrizar
-
-    def draw_node_pin_contents(self):
-        if self.pin_kind == imgui_node_editor.PinKind.output:
-            imgui.text_unformatted(self.name)
-        draw = imgui.get_window_draw_list()
-        size = imgui.get_text_line_height()
-        center = Vector2.from_cursor_screen_pos() + (size * 0.5, size * 0.5)
-        radius = size * 0.3
-        color = imgui.get_color_u32(self.default_link_color)
-        if self.is_linked_to_any():
-            draw.add_circle_filled(center, radius, color)
-        else:
-            thickness = 2
-            draw.add_circle(center, radius, color, thickness=thickness)
-        imgui.dummy((size, size))
-        if self.pin_kind == imgui_node_editor.PinKind.input:
-            imgui.text_unformatted(self.name)
-
-    def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
-        ok, msg = super().can_link_to(pin)
-        if not ok:
-            return ok, msg
-        if not isinstance(pin, DataPin):
-            return False, "Can only link to a Data pin."
-        # Type Check: output-pin type must be same or subclass of input-pin type
-        if self.pin_kind == imgui_node_editor.PinKind.input:
-            out_type = pin.value_type
-            in_type = self.value_type
-        else:
-            out_type = self.value_type
-            in_type = pin.value_type
-        if not issubclass(out_type, in_type):
-            return False, f"Can't pass '{out_type}' to '{in_type}'"
-        # Logic in on_new_link_added ensures we only have 1 link, if we're a input pin.
-        return True, "success"
-
-    def get_value(self):
-        """Gets the value of this DataPin. This can be:
-        * For OUTPUT Pins: return our ``value``.
-        * For INPUT Pins with a link to another data pin: return the value of the output pin we're linked to.
-        * For INPUT Pins without a link: return our ``value``, which serves as a default value.
-        """
-        if self.pin_kind == imgui_node_editor.PinKind.output:
-            return self.value
-        elif self.is_linked_to_any():
-            link = self.get_all_links()[0]
-            return link.start_pin.get_value()
-        else:
-            return self.value  # the input pin's default value
-
-    def set_value(self, value):
-        """Sets our value to the given object. This should be the same type as it's expected by this DataPin.
-        However, that isn't enforced."""
-        self.value = value
-
-    def render_edit_details(self):
-        # Let output pins have their value edited/set as well. That will enable setting a output pin's default value.
-        # And also allow nodes without flow connections that only output static values!
-        # TODO: editor for our value_type
-        changed, t = imgui.input_text("##", self.value or "")
-        if changed:
-            self.set_value(t)
-
-    def on_new_link_added(self, link: NodeLink):
-        if self.pin_kind == imgui_node_editor.PinKind.input:
-            # Remove all other links, only allow the new one. Input DataPins can only have 1 link.
-            for pin, other_link in list(self._links.items()):
-                if other_link != link:
-                    self.remove_link_to(pin)
-
-    def __str__(self):
-        return f"{self.pin_kind.name.capitalize()} Data {self.name}"
-
-    @classmethod
-    def from_property(cls, prop: property, parent: Node, kind: imgui_node_editor.PinKind, name: str):
-        """Creates a DataPin based on the given property.
-
-        The pin's name, tooltip, type and value are linked to the property.
-
-        Args:
-            prop (property): The property to use.
-            parent (Node): The node. The PROP property should be from this node.
-            kind (imgui_node_editor.PinKind): The kind of this pin.
-            name (str): name of the property.
-
-        Returns:
-            DataPin: the pin
-        """
-        sig = inspect.signature(prop.fget)
-        value_type = sig.return_annotation
-        initial_value = getattr(parent, name)
-        pin = cls(parent, kind, name, value_type, initial_value)
-        pin.pin_tooltip = prop.__doc__
-        return pin
-
-
-def node_data_property(kind: imgui_node_editor.PinKind):
-    """Node Data Property attribute. Can be used to create node data properties the same way as a regular @property.
-
-    A Node Data property behaves exactly the same way as a regular python @property, but also includes associated
-    data that is used to create DataPin associated with this property in its parent Node class."""
-    class NodeDataProperty(property):
-        pin_kind = kind
-
-        def __get__(self, obj: 'Action', owner: type | None = None):
-            ret = super().__get__(obj, owner)
-            name = self.fget.__name__
-            pin = obj.get_input_data_pin(name) if self.pin_kind == imgui_node_editor.PinKind.input else obj.get_output_data_pin(name)
-            if pin:
-                return pin.get_value()
-            return ret
-
-        def __set__(self, obj: 'Action', value):
-            name = self.fget.__name__
-            pin = obj.get_input_data_pin(name) if self.pin_kind == imgui_node_editor.PinKind.input else obj.get_output_data_pin(name)
-            if pin:
-                pin.set_value(value)
-            else:
-                return super().__set__(obj, value)
-    return NodeDataProperty
-
-
-def input_property():
-    """Node-Data Property attribute for a input data value.
-
-    Only the property getter is required to define name, type and docstring.
-    The setter is defined automatically by the NodeDataProperty."""
-    return node_data_property(imgui_node_editor.PinKind.input)
-
-
-def output_property():
-    """Node-Data Property attribute for a output data value.
-
-    Only the property getter is required to define name, type and docstring.
-    The setter is defined automatically by the NodeDataProperty."""
-    return node_data_property(imgui_node_editor.PinKind.output)
-
-
-def create_data_pins_from_properties(node: Node):
-    """Creates input and output DataPins for the given node based on its ``@node_data_property``s.
-
-    Args:
-        node (Node): The node to create data pins for.
-
-    Returns:
-        tuple[list[DataPin], list[DataPin]]: a (inputs, outputs) tuple, where each item is a list of
-        DataPins for that kind of pin. Lists might be empty if the node has no properties of that kind.
-    """
-    props = get_all_properties(type(node))
-    inputs: list[DataPin] = []
-    outputs: list[DataPin] = []
-    for name, prop in props.items():
-        kind: imgui_node_editor.PinKind = getattr(prop, "pin_kind", None)
-        if kind is None:
-            continue
-        pin = DataPin.from_property(prop, node, kind, name)
-        if kind == imgui_node_editor.PinKind.input:
-            inputs.append(pin)
-        else:
-            outputs.append(pin)
-    return inputs, outputs
-
-
 @not_user_creatable
-class Action(Node):
-    """TODO"""
+class Action(CommonNode):
+    """Generic code/logic execution node. A Action is a node that:
+    * Is triggered by a ActionFlow pin.
+    * May receive input data, from linked data pins or from its defined default values.
+    * Executes some logic
+    * May send output data, to be used by other nodes.
+    * May have ActionFlow output pins, which can be used to trigger other actions.
+
+    As such, actions define a system of generic logic execution akin to a node-based visual language.
+    """
 
     def __init__(self):
         super().__init__()
-        self.editor: NodeEditor = None
-        self._inputs: list[NodePin] = [ActionFlow(self, imgui_node_editor.PinKind.input, "Execute")]
-        """List of input pins of this action node."""
-        self._outputs: list[NodePin] = [ActionFlow(self, imgui_node_editor.PinKind.output, "Trigger")]
-        """List of output pins of this action node."""
-        data_inputs, data_outputs = create_data_pins_from_properties(self)
-        self._inputs += data_inputs
-        self._outputs += data_outputs
+        self._inputs.append(ActionFlow(self, PinKind.input, "Execute"))
+        self._outputs.append(ActionFlow(self, PinKind.output, "Trigger"))
+        self.create_data_pins_from_properties()
 
     def execute(self):
         """Executes the logic of this action.
@@ -315,67 +145,19 @@ class Action(Node):
             if flow.name == name:
                 flow.trigger()
 
-    def get_input_data_pin(self, name: str):
-        """Gets our INPUT DataPin with the given name.
-
-        Args:
-            name (str): name to check for.
-
-        Returns:
-            DataPin: The DataPin with the given name, or None if no pin exists.
-        """
-        for data in [pin for pin in self._inputs if isinstance(pin, DataPin)]:
-            if data.name == name:
-                return data
-
-    def get_output_data_pin(self, name: str):
-        """Gets our OUTPUT DataPin with the given name.
-
-        Args:
-            name (str): name to check for.
-
-        Returns:
-            DataPin: The DataPin with the given name, or None if no pin exists.
-        """
-        for data in [pin for pin in self._outputs if isinstance(pin, DataPin)]:
-            if data.name == name:
-                return data
-
-    def delete(self):
-        if self.editor:
-            self.editor.nodes.remove(self)
-
-    def get_input_pins(self) -> list[NodePin]:
-        return self._inputs
-
-    def get_output_pins(self) -> list[NodePin]:
-        return self._outputs
-
-    def render_edit_details(self):
-        if len(self._inputs) > 1:
-            imgui.text("Input Pins Default Values:")
-        for pin in self._inputs:
-            if not isinstance(pin, DataPin):
-                continue
-            imgui.text(pin.name)
-            imgui.same_line()
-            pin.render_edit_details()
-
-    def __str__(self) -> str:
-        return self.__class__.__name__
-
 
 class Print(Action):
-    """TODO"""
+    """Prints a value to the terminal."""
 
     @input_property()
     def text(self) -> str:
-        """TEST DOC TEXT"""
-
-    @output_property()
-    def out(self) -> str:
-        pass
+        """Text to print."""
 
     def execute(self):
         print(self.text)
         self.trigger_flow()
+
+
+# TODO: criar as várias actions que já precisaremos de inicio
+# TODO: fazer as coisas pra conseguir pegar sensores e associar eles aos widgets/actions.
+# TODO: mudar design básico dos nodes, pra diferenciar entre Widgets, Actions, e provavelmente Sensors tb se ele for um node em si.
