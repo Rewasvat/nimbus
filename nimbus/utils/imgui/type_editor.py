@@ -1,7 +1,6 @@
 import inspect
 import nimbus.utils.command_utils as cmd_utils
 from enum import Enum
-from typing import Callable
 from imgui_bundle import imgui
 from nimbus.utils.imgui.math import Vector2
 from nimbus.utils.imgui.colors import Color, Colors
@@ -61,6 +60,30 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
             db = cls()
             db.add_type_editor(type_cls, editor_cls)
             return editor_cls
+        return decorator
+
+    @classmethod
+    def register_noop_editor_for_this(cls, color: Color):
+        """[DECORATOR] Registers a Noop Editor as TypeEditor for the decorated class.
+
+        A NoopEditor is a editor that basically does nothing. It doesn't allow editing its value type.
+        It's useful so that the editor system can still work for the type (the decorated class).
+
+        NOTE: usage of this decorator is different from the ``register_editor_for_type``! Both are used to decorate classes,
+        but this should be used on any class that you want to have a no-op type editor; while ``register_editor_for_type``
+        is used to decorated a TypeEditor class, and register it as editor for a given type.
+
+        Args:
+            color (Color): Type color to set in the NoopEditor.
+        """
+        def decorator(type_cls):
+            class SpecificNoopEditor(NoopEditor):
+                def __init__(self, data: dict):
+                    super().__init__(data)
+                    self.color = color
+            db = cls()
+            db.add_type_editor(type_cls, SpecificNoopEditor)
+            return type_cls
         return decorator
 
 
@@ -174,6 +197,12 @@ def imgui_property(**kwargs):
     return adv_property(kwargs, ImguiProperty)
 
 
+# Other colors:
+#   int: cyan
+#   object/table: blue
+#   array: yellow   ==>used on Enum
+#   generic: (0.2, 0.2, 0.6, 1)  ==>used as default color in TypeEditor
+######################
 # TODO: Possivelmente mover classes de editores pra vários outros módulos.
 # TODO: refatorar esse sistema pra não ser tão rigido. Usando reflection pra ler as type_hints da property
 #   pra pegar os editors certos automaticamente. Isso facilitaria muito o uso.
@@ -218,7 +247,7 @@ class TypeEditor:
         """
         self.add_tooltip_after_value = True
         """If true, this will add ``self.attr_doc`` as a tooltip for the last imgui control drawn."""
-        self.color: Color = Colors.red
+        self.color: Color = Color(0.2, 0.2, 0.6, 1)
         """Color of this type. Mostly used by DataPins of this type in Node Systems."""
 
     def render_property(self, obj, name: str):
@@ -308,6 +337,7 @@ class StringEditor(TypeEditor):
         self.docs: list[str] | dict[str, str] | None = data.get("docs")
         self.option_flags: imgui.SelectableFlags_ = data.get("flags", 0)
         self.add_tooltip_after_value = self.options is None
+        self.color = Colors.magenta
 
     def draw_value_editor(self, value: str) -> tuple[bool, str]:
         if self.options is None:
@@ -342,6 +372,7 @@ class EnumEditor(TypeEditor):
     def __init__(self, data: dict):
         super().__init__(data)
         self.add_tooltip_after_value = False
+        self.color = Colors.yellow
         self.flags: imgui.SelectableFlags_ = data.get("flags", 0)
 
     def draw_value_editor(self, value: str | Enum) -> tuple[bool, str | Enum]:
@@ -365,6 +396,7 @@ class BoolEditor(TypeEditor):
 
     def __init__(self, data: dict):
         super().__init__(data)
+        self.color = Colors.red
 
     def draw_value_editor(self, value: bool):
         return imgui.checkbox("##", value)
@@ -410,6 +442,7 @@ class FloatEditor(TypeEditor):
         """Format to use to convert value to display as text in the control (use python float format, such as ``%.2f``)"""
         self.flags: imgui.SliderFlags_ = data.get("flags", 0)
         """Slider flags to use in imgui's float control."""
+        self.color = Colors.green
 
     def draw_value_editor(self, value: float):
         if value is None:
@@ -446,6 +479,7 @@ class ColorEditor(TypeEditor):
         # flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none
         super().__init__(data)
         self.flags: imgui.ColorEditFlags_ = data.get("flags", 0)
+        self.color = Color(1, 0.5, 0.3, 1)
 
     def draw_value_editor(self, value: Color):
         changed, new_value = imgui.color_edit4("##", value, self.flags)
@@ -546,6 +580,7 @@ class Vector2Editor(TypeEditor):
         self.x_range: Vector2 = data.get("x_range", (0, 0))
         self.y_range: Vector2 = data.get("y_range", (0, 0))
         self.add_tooltip_after_value = False
+        self.color = Color(0, 0.5, 1, 1)
 
     def draw_value_editor(self, value: Vector2):
         if value is None:
@@ -567,6 +602,17 @@ class Vector2Editor(TypeEditor):
             return imgui.slider_float("##value", value, min, max, self.format, self.flags)
         else:
             return imgui.drag_float("##value", value, self.speed, min, max, self.format, self.flags)
+
+
+class NoopEditor(TypeEditor):
+    """Imgui TypeEditor for a type that can't be edited.
+
+    This allows editors to exist, and thus provide some other features (such as type color), for types that can't be edited.
+    """
+
+    def draw_value_editor[T](self, value: T) -> tuple[bool, T]:
+        imgui.text_colored(Colors.yellow, f"Can't edit object '{value}'")
+        return False, value
 
 
 def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, flags: imgui.SliderFlags_ = 0):
@@ -598,8 +644,7 @@ def get_all_renderable_properties(cls: type) -> dict[str, ImguiProperty]:
         dict[str, ImguiTypeEditor]: a "property name" => "ImguiTypeEditor object" dict with all imgui properties.
         All editors returned by this will have had their "parent properties" set accordingly.
     """
-    props = get_all_properties(cls)
-    return {k: v for k, v in props.items() if isinstance(v, ImguiProperty)}
+    return get_all_properties(cls, ImguiProperty)
 
 
 def render_all_properties(obj, ignored_props: set[str] = None):

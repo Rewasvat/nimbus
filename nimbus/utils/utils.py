@@ -309,16 +309,17 @@ def adv_property(metadata: dict[str, any], base_prop=AdvProperty):
     return SpecificAdvProperty
 
 
-def get_all_properties(cls: type) -> dict[str, property]:
+def get_all_properties(cls: type, prop_type=property) -> dict[str, property]:
     """Gets all ``@property``s of a class. This includes properties of parent classes.
 
     Args:
         cls (type): The class to get the properties from.
+        prop_type (type[property]): the property type to get. Defaults to regular python Property.
 
     Returns:
         dict[str, property]: a "property name" => "property object" dict with all properties.
     """
     props = {}
     for kls in reversed(cls.mro()):
-        props.update({key: value for key, value in kls.__dict__.items() if isinstance(value, property)})
+        props.update({key: value for key, value in kls.__dict__.items() if isinstance(value, prop_type)})
     return props
