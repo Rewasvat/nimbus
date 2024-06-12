@@ -565,7 +565,7 @@ class Sensor:
         targets = None
         if self.unit in (SensorUnit.PERCENT, SensorUnit.FAN):
             targets = [
-                (Colors.purple, 0),
+                (Colors.magenta, 0),
                 (Colors.green, 0.0001),
                 (Colors.white, 0.5),
                 (Colors.yellow, 0.75),
