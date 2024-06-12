@@ -218,6 +218,7 @@ def is_user_creatable(cls: type):
     return not my_tags.get("not_user_creatable", False)
 
 
+# TODO: adicionar input-text pra filtrar nomes de classes disponiveis, com um separator pro resto do menu com os botoes pra criar.
 def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
     """Renders the contents for a menu that allows the user to create a new object, given the possible options.
 

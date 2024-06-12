@@ -4,7 +4,10 @@ from nimbus.utils.imgui.colors import Color, Colors
 from imgui_bundle import imgui, ImVec2, imgui_node_editor  # type: ignore
 
 
-# TODO: mudar cor de background do node header.
+# TODO: mudar cor de background do node header (mostly pra diferenciar "tipos" de nodes, ver exemplos/cores nas coisas da tapps)
+# TODO: mudar cor de background do node content (mostly pra "nodes especiais")
+# TODO: permitir um sub-title abaixo do name do nome, no header.
+# TODO: linha separando header do content.
 class Node:
     """Utility class to represent a Node in imgui's Node Editor.
 
@@ -24,6 +27,18 @@ class Node:
         """If this object can be deleted by user-interaction."""
         self.is_selected = False
         """If this node is selected by the user in the node-editor."""
+        self.editor: NodeEditor = None
+        """NodeEditor system this node is associated with. This is the NodeEditor that is handling/editing this node."""
+        self._node_title: str = None
+
+    @property
+    def node_title(self) -> str:
+        """Title/name of node to display in NodeEditor. If none, defaults to ``str(self)``."""
+        return self._node_title if self._node_title else str(self)
+
+    @node_title.setter
+    def node_title(self, value: str):
+        self._node_title = value
 
     def draw_node(self):
         """Draws the node in imgui's Node Editor.
@@ -64,7 +79,7 @@ class Node:
         """
         imgui.begin_horizontal(f"{repr(self)}NodeHeader")
         imgui.spring(1)
-        imgui.text_unformatted(str(self))
+        imgui.text_unformatted(self.node_title)
         imgui_node_editor.suspend()
         imgui.set_item_tooltip(type(self).__doc__)
         imgui_node_editor.resume()
@@ -160,6 +175,11 @@ class Node:
         pass
 
 
+PinKind = imgui_node_editor.PinKind
+"""Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
+
+
+# TODO: comando geral pra "deletar todos links" no menu dos pins, tipo o botão de delete.
 class NodePin:
     """An Input or Output Pin in a Node.
 
@@ -168,7 +188,7 @@ class NodePin:
     Implementations should override the method ``draw_node_pin_contents()`` to draw the pin's contents.
     """
 
-    def __init__(self, parent: Node, kind: imgui_node_editor.PinKind):
+    def __init__(self, parent: Node, kind: PinKind):
         self.parent_node: Node = parent
         self.pin_id = imgui_node_editor.PinId.create()
         self.pin_kind = kind
@@ -302,6 +322,11 @@ class NodePin:
         pin.on_link_removed(link)
         return link
 
+    def remove_all_links(self):
+        """Removes all links from this pin."""
+        for pin in list(self._links.keys()):
+            self.remove_link_to(pin)
+
     def _add_new_link(self, pin: 'NodePin') -> 'NodeLink':
         """Internal method to create a new link between this and the given pin, and add it
         to both pins.
@@ -317,7 +342,7 @@ class NodePin:
             be the link's starting pin. However, since this does not validate that the pins are of different kinds,
             this rule might be broken when this method is used incorrectly.
         """
-        if self.pin_kind == imgui_node_editor.PinKind.output:
+        if self.pin_kind == PinKind.output:
             link = NodeLink(self, pin)
         else:
             link = NodeLink(pin, self)
@@ -436,6 +461,7 @@ def get_all_links_from_nodes(nodes: list[Node]):
 # TODO: colocar dados salvos do imgui-node-editor no nosso DataCache
 #   - atualmente, ele salva num json default na pasta onde executou o app (ver `Widgets_Test` no ~)
 #   - investigar q tem um Widgets_Test.ini lá tb
+# TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
 class NodeEditor:
     """Represents a Node Editor system.
 
@@ -521,9 +547,11 @@ class NodeEditor:
         for node in self.nodes:
             if node.is_selected:
                 has_selection = True
-                if imgui.collapsing_header(str(node)):
+                imgui.push_id(repr(node))
+                if imgui.collapsing_header(node.node_title):
                     node.render_edit_details()
                     imgui.spacing()
+                imgui.pop_id()
 
         if not has_selection:
             imgui.text_wrapped("Select Nodes to display & edit their details here.")
@@ -537,6 +565,7 @@ class NodeEditor:
         # Step 1: Commit all known node data into editor
         # Step 1-A) Render All Existing Nodes
         for node in self.nodes:
+            node.editor = self
             node.draw_node()
 
         # Step 1-B) Render All Existing Links
@@ -568,7 +597,7 @@ class NodeEditor:
                 start_pin = self.find_pin(output_pin_id)
                 end_pin = self.find_pin(input_pin_id)
 
-                if start_pin.pin_kind == imgui_node_editor.PinKind.input:
+                if start_pin.pin_kind == PinKind.input:
                     start_pin, end_pin = end_pin, start_pin
 
                 if start_pin and end_pin:
@@ -681,10 +710,13 @@ class NodeEditor:
                 pin.render_edit_details()
             else:
                 imgui.text_colored(Colors.red, "Invalid Pin")
-            if pin and pin.can_be_deleted:
+            if pin:
                 imgui.separator()
-                if menu_item("Delete"):
-                    pin.delete()
+                if menu_item("Remove All Links"):
+                    pin.remove_all_links()
+                if pin.can_be_deleted:
+                    if menu_item("Delete"):
+                        pin.delete()
             imgui.end_popup()
 
     def open_link_context_menu(self, link_id: imgui_node_editor.LinkId):
@@ -753,7 +785,7 @@ class NodeEditor:
         Returns:
             NodeLink: the new link, if one was successfully created.
         """
-        if pin.pin_kind == imgui_node_editor.PinKind.input:
+        if pin.pin_kind == PinKind.input:
             other_pins = node.get_output_pins()
         else:
             other_pins = node.get_input_pins()
