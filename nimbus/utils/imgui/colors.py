@@ -52,7 +52,7 @@ class ColorsClass:
         return Color(0, 1, 1, 1)
 
     @property
-    def purple(self) -> Color:
+    def magenta(self) -> Color:
         return Color(1, 0, 1, 1)
 
     @property

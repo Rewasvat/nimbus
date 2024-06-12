@@ -322,7 +322,7 @@ class WidgetsTestApp(windows.AppWindow):
         brd = Board(["Default", "Other"])
         pnl.content.child = brd
 
-        other = Rect(Colors.purple)
+        other = Rect(Colors.magenta)
         other.is_top_rounded = other.is_bottom_rounded = other.is_left_rounded = other.is_right_rounded = True
         other.name = "OtherStuff"
         brd.get_slot("Other").child = other
