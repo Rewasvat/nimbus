@@ -249,6 +249,16 @@ class TypeEditor:
         """If true, this will add ``self.attr_doc`` as a tooltip for the last imgui control drawn."""
         self.color: Color = Color(0.2, 0.2, 0.6, 1)
         """Color of this type. Mostly used by DataPins of this type in Node Systems."""
+        self.can_accept_any_input = False
+        """If this type, when used as a Input DataPin in Node Systems, can accept a value from any other type
+        as its input value. Useful for types that can accept (or convert) any value to its type.
+
+        This is usually used together with ``self.convert_value_to_type`` to ensure the input value is converted
+        to this type.
+        """
+        self.convert_value_to_type = False
+        """If the value we receive should be converted to our ``value_type`` before using. This is done using
+        ``self.value_type(value)``, like most basic python types accept."""
 
     def render_property(self, obj, name: str):
         """Renders this type editor as a KEY:VALUE editor for a ``obj.name`` property/attribute.
@@ -270,6 +280,7 @@ class TypeEditor:
         imgui.same_line()
 
         value = getattr(obj, name)
+        value = self._check_value_type(value)
         changed, new_value = self.render_value_editor(value)
         if changed:
             setattr(obj, name, new_value)
@@ -292,6 +303,7 @@ class TypeEditor:
             tuple[bool, T]: returns a ``(changed, new_value)`` tuple.
         """
         imgui.push_id(f"{repr(self)}")
+        value = self._check_value_type(value)
         changed, new_value = self.draw_value_editor(value)
         if self.add_tooltip_after_value:
             imgui.set_item_tooltip(self.attr_doc)
@@ -324,6 +336,19 @@ class TypeEditor:
         if method is not None:
             method(self)
 
+    def _check_value_type[T](self, value: T) -> T:
+        """Checks and possibly converts the given value to our value-type if required.
+
+        Args:
+            value (T): the value to type-check.
+
+        Returns:
+            _type_: _description_
+        """
+        if self.convert_value_to_type and self.value_type and not isinstance(value, self.value_type):
+            value = self.value_type(value)
+        return value
+
 
 @TypeDatabase.register_editor_for_type(str)
 class StringEditor(TypeEditor):
@@ -338,6 +363,8 @@ class StringEditor(TypeEditor):
         self.option_flags: imgui.SelectableFlags_ = data.get("flags", 0)
         self.add_tooltip_after_value = self.options is None
         self.color = Colors.magenta
+        self.can_accept_any_input = True
+        self.convert_value_to_type = True
 
     def draw_value_editor(self, value: str) -> tuple[bool, str]:
         if self.options is None:
@@ -397,6 +424,8 @@ class BoolEditor(TypeEditor):
     def __init__(self, data: dict):
         super().__init__(data)
         self.color = Colors.red
+        self.can_accept_any_input = True
+        self.convert_value_to_type = True
 
     def draw_value_editor(self, value: bool):
         return imgui.checkbox("##", value)
