@@ -1,7 +1,9 @@
+import math
 from typing import Callable
 from nimbus.utils.imgui.general import menu_item
 from nimbus.utils.imgui.colors import Color, Colors
-from imgui_bundle import imgui, ImVec2, imgui_node_editor  # type: ignore
+from nimbus.utils.imgui.math import Vector2, Rectangle
+from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
 
 # TODO: mudar cor de background do node header (mostly pra diferenciar "tipos" de nodes, ver exemplos/cores nas coisas da tapps)
@@ -40,13 +42,21 @@ class Node:
     def node_title(self, value: str):
         self._node_title = value
 
+    @property
+    def node_area(self) -> Rectangle:
+        """Gets the node's area (position and size).
+        This is the rectangle that bounds the node."""
+        pos = imgui_node_editor.get_node_position(self.node_id)
+        size = imgui_node_editor.get_node_size(self.node_id)
+        return Rectangle(pos, size)
+
     def draw_node(self):
         """Draws the node in imgui's Node Editor.
 
         This should only be called inside a imgui-node-editor rendering context.
         """
         imgui_node_editor.begin_node(self.node_id)
-        imgui.push_id(self.node_id.id())
+        imgui.push_id(repr(self))
         imgui.begin_vertical(f"{repr(self)}NodeMain")
         self.draw_node_header()
         imgui.begin_horizontal(f"{repr(self)}NodeContent")
@@ -65,8 +75,8 @@ class Node:
         imgui.end_horizontal()  # content
         imgui.end_vertical()  # node
         # footer? como?
-        imgui_node_editor.end_node()
         imgui.pop_id()
+        imgui_node_editor.end_node()
 
         self.is_selected = imgui_node_editor.is_node_selected(self.node_id)
 
@@ -95,14 +105,24 @@ class Node:
         It displays all input pins from the node (see ``self.get_input_pins()``)
         """
         imgui.begin_vertical(f"{repr(self)}NodeInputs", align=0)
-        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_alignment, ImVec2(0, 0.5))
-        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_size, ImVec2(0, 0))
+        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_alignment, Vector2(0, 0.5))
+        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_size, Vector2(0, 0))
         for i, pin in enumerate(self.get_input_pins()):
             if i > 0:
                 imgui.spring(0)
             pin.draw_node_pin()
-        imgui_node_editor.pop_style_var(2)
+        num_ins = len(self.get_input_pins())
+        num_outs = len(self.get_output_pins())
+        if num_outs > num_ins:
+            # NOTE: WORKAROUND! This is a fix for a bizarre bug in which the >Parent pin in container widgets (and only it)
+            # changes its Y position according to the editor's zoom. The pin itself, as seen by links going out of it and highlight
+            # area, is in the correct place. But its contents (the >Parent), regardless of it, moves away.
+            size = imgui.get_text_line_height()
+            for i in range(num_outs - num_ins):
+                imgui.spring(0)
+                imgui.dummy((size, size))
         imgui.spring(1, 0)
+        imgui_node_editor.pop_style_var(2)
         imgui.end_vertical()
 
     def draw_node_outputs(self):
@@ -112,8 +132,8 @@ class Node:
         It displays all output pins from the node (see ``self.get_output_pins()``)
         """
         imgui.begin_vertical(f"{repr(self)}NodeOutputs", align=1)
-        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_alignment, ImVec2(1, 0.5))
-        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_size, ImVec2(0, 0))
+        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_alignment, Vector2(1, 0.5))
+        imgui_node_editor.push_style_var(imgui_node_editor.StyleVar.pivot_size, Vector2(0, 0))
         for i, pin in enumerate(self.get_output_pins()):
             if i > 0:
                 imgui.spring(0)
@@ -174,12 +194,107 @@ class Node:
         """
         pass
 
+    def walk_in_graph(self, callback: Callable[['Node', int], bool], allowed_outputs: list[type['NodePin']], starting_level=0,
+                      walked_nodes: set['Node'] = None):
+        """Walks through the graph this node belongs to, starting with it.
+
+        This calls ``callback`` for a node (starting with ``self``) passing the current level. If the callback returns True,
+        this will go through all links from all output pins which are instances of types in the ``allowed_outputs`` list.
+        For each of these links, this method will be called recursively for the node on the other side of the link.
+
+        Thus, callback will be called for this node and all others that follow the given output pins.
+        Callback (and this method) will not be called multiple times for the same node.
+
+        Args:
+            callback (Callable[[Node, int], bool]): The callable to be executed for each node we pass by. The callback will receive the node
+            instance itself, and the current level. The current level increases by 1 each time we go from one node to the next.
+            allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these classes will be used to
+            walk through to the next nodes in the graph via their links.
+            starting_level (int, optional): The current level for this ``walk_in_graph`` execution. The ``callback`` will be called with this level.
+            This increments internally as the graph is walked through. User may pass this when initially calling this method in the starting node,
+            altho its recommended not to. Defaults to 0.
+            walked_nodes (set[Node], optional): Set of nodes this walk has already passed through. The walk ignores nodes that are in this set.
+            This is used internally to control which nodes we already walked through. Defaults to None.
+        """
+        if walked_nodes is None:
+            walked_nodes = set()
+        if self in walked_nodes:
+            return
+        walked_nodes.add(self)
+        ok = callback(self, starting_level)
+        if not ok:
+            return
+        for pin in self.get_output_pins():
+            if isinstance(pin, tuple(allowed_outputs)):
+                for link in pin.get_all_links():
+                    link.end_pin.parent_node.walk_in_graph(callback, allowed_outputs, starting_level + 1, walked_nodes)
+
+    def reposition_nodes(self, allowed_outputs: list[type['NodePin']] = None):
+        """Rearranges all nodes following this one, from links of the allowed output pins.
+
+        The nodes will be repositioned after this according to their depth in the graph, and spaced between one another.
+
+        Args:
+            allowed_outputs (list[type[NodePin]]): List or tuple of NodePin classes for output pins. Pins that are of these classes will be used to
+            walk through to the next nodes in the graph via their links.
+        """
+        if allowed_outputs is None:
+            allowed_outputs = [NodePin]
+
+        # NOTE: marca ponto de save pra undo
+        max_width_by_level: dict[int, float] = {}
+        total_height_by_level: dict[int, float] = {}
+
+        horizontal_spacing = math.inf
+        vertical_spacing = 10
+
+        def check_position(node: Node, level: int):
+            nonlocal horizontal_spacing
+            node_size = node.node_area.size
+            total_height = total_height_by_level.get(level, -vertical_spacing)
+            total_height = total_height + node_size.y + vertical_spacing
+            total_height_by_level[level] = total_height
+
+            max_width = max_width_by_level.get(level, 0)
+            max_width_by_level[level] = max(max_width, node_size.x)
+            horizontal_spacing = min(node_size.x, horizontal_spacing)
+            return True
+
+        self.walk_in_graph(check_position, allowed_outputs)
+
+        total_graph_width = sum(max_width_by_level.values()) + (len(max_width_by_level)-1)*horizontal_spacing
+        current_height_by_level = {}
+        offset = Vector2()
+
+        def move_node(node: Node, level: int):
+            nonlocal offset
+            x = -total_graph_width * 0.5
+            for index, width in max_width_by_level.items():
+                if index == level:
+                    break
+                x = x + width + horizontal_spacing
+
+            current_height = current_height_by_level.get(level, total_height_by_level[level] * -0.5)
+            y = current_height
+            current_height = current_height + node.node_area.size.y + vertical_spacing
+            current_height_by_level[level] = current_height
+
+            position = Vector2(x, y) - node.node_area.size * 0.5
+            if level > 0:
+                imgui_node_editor.set_node_position(node.node_id, position + offset)
+            else:
+                offset = node.node_area.position - position
+            return True
+
+        self.walk_in_graph(move_node, allowed_outputs)
+        self.editor.fit_to_window()
+
 
 PinKind = imgui_node_editor.PinKind
 """Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
 
 
-# TODO: comando geral pra "deletar todos links" no menu dos pins, tipo o botão de delete.
+# TODO: ter default pin content?
 class NodePin:
     """An Input or Output Pin in a Node.
 
@@ -224,7 +339,7 @@ class NodePin:
         The area available for drawing the pin's contents is usually limited, and is horizontally aligned.
         Implementations should override this method to define their drawing logic - default implementation raises an error.
         """
-        raise NotImplementedError  # TODO: ter default?
+        raise NotImplementedError
 
     def get_all_links(self) -> list['NodeLink']:
         """Gets all links connected to this pin."""
@@ -438,6 +553,18 @@ class NodeLink:
         """Checks if the given pin is the start or end point of this link."""
         return self.start_pin == pin or self.end_pin == pin
 
+    def animate_flow(self, reversed=False):
+        """Triggers a temporary animation of "flowing" in this link, from the start to the end pin.
+
+        This animation quite visually indicates a flow of one pin to the other.
+        Flow animation parameters can be changed in Imgui Node Editor's Style.
+
+        Args:
+            reversed (bool, optional): True if animation should be reversed (from end pin to start pin). Defaults to False.
+        """
+        direction = imgui_node_editor.FlowDirection.backward if reversed else imgui_node_editor.FlowDirection.forward
+        imgui_node_editor.flow(self.link_id, direction)
+
     def __str__(self):
         return f"({self.start_pin})== link to =>({self.end_pin})"
 
@@ -456,7 +583,6 @@ def get_all_links_from_nodes(nodes: list[Node]):
     return list(dict.fromkeys(links))
 
 
-# TODO: feature de ordenar o grafo: reposiciona todos nodes pra ficar um grafo decente (tem algo assim na TPLove)
 # TODO: copy/paste/cut
 # TODO: colocar dados salvos do imgui-node-editor no nosso DataCache
 #   - atualmente, ele salva num json default na pasta onde executou o app (ver `Widgets_Test` no ~)
@@ -476,10 +602,45 @@ class NodeEditor:
         self.nodes: list[Node] = []
         """List of existing nodes in the system."""
         self._background_context_menu_draw_method = background_context_menu
+        """Callable used in the Editor's Background Context Menu to create a new node.
+
+        The callable should draw the controls its needs to display all options of nodes to create. If user selects a node to create,
+        the callable should return the new Node's instance. The new node doesn't need to be added to this editor, the editor does that automatically.
+
+        Callable only receives a single argument: a NodePin argument. This is the pin the user pulled a link from and selected to create a new node.
+        This might be None if the user simply clicked the background of the editor to create a new node anywhere. The callable thus can use this to
+        filter possible Nodes to allow creation.
+        """
         self._create_new_node_to_pin: NodePin = None
+        """Pin from which a used pulled a new link to create a new link.
+
+        This is used by the Background Context Menu. If this is not-None, then the menu was opened by pulling
+        a link to create a new node."""
         self._selected_menu_node: Node = None
         self._selected_menu_pin: NodePin = None
         self._selected_menu_link: NodeLink = None
+
+    def add_node(self, node: Node):
+        """Adds a node to this NodeEditor. This will show the node in the editor, and allow it to be edited/updated.
+
+        If this node has links to any other nodes, those nodes have to be in this editor as well for the links to be shown.
+        This methods only adds the given node.
+
+        Args:
+            node (Node): Node to add to this editor. If node is already on the editor, does nothing.
+        """
+        if node not in self.nodes:
+            self.nodes.append(node)
+
+    def remove_node(self, node: Node):
+        """Removes the given node from this NodeEditor. The node will no longer be shown in the editor, and no longer updateable
+        through the node editor.
+
+        Args:
+            node (Node): Node to remove from this editor. If node isn't in this editor, does nothing.
+        """
+        if node in self.nodes:
+            self.nodes.remove(node)
 
     def find_node(self, id: imgui_node_editor.NodeId):
         """Finds the node with the given NodeID amongst our nodes."""
@@ -760,9 +921,14 @@ class NodeEditor:
                 pos = imgui.get_cursor_screen_pos()
                 new_node = self._background_context_menu_draw_method(self._create_new_node_to_pin)
                 if new_node:
+                    self.add_node(new_node)
                     if self._create_new_node_to_pin:
                         self.try_to_link_node_to_pin(new_node, self._create_new_node_to_pin)
                     imgui_node_editor.set_node_position(new_node.node_id, imgui_node_editor.screen_to_canvas(pos))
+            if self._create_new_node_to_pin is None:
+                imgui.separator()
+                if menu_item("Fit to Window"):
+                    self.fit_to_window()
             imgui.end_popup()
 
     def show_label(self, text: str):
@@ -793,3 +959,30 @@ class NodeEditor:
             link = pin.link_to(other_pin)
             if link:
                 return link
+
+    def get_graph_area(self, margin: float = 10):
+        """Gets the graph's total area.
+
+        This is the bounding box that contains all nodes in the editor, as they are positioned at the moment.
+
+        Args:
+            margin (float, optional): Optional margin to add to the returned area. The area will be expanded by this amount
+            to each direction (top/bottom/left/right). Defaults to 10.
+
+        Returns:
+            Rectangle: the bounding box of all nodes together. This might be None if no nodes exist in the editor.
+        """
+        area = None
+        for node in self.nodes:
+            if area is None:
+                area = node.node_area
+            else:
+                area += node.node_area
+        if area is not None:
+            area.expand(margin)
+        return area
+
+    def fit_to_window(self):
+        """Changes the editor's viewport position and zoom in order to make all content in the editor
+        fit in the window (the editor's area)."""
+        imgui_node_editor.navigate_to_content()

@@ -314,7 +314,8 @@ class CommonNode(Node):
 
     def delete(self):
         if self.editor:
-            self.editor.nodes.remove(self)
+            self.editor.remove_node(self)
+            self.editor = None
 
     def get_input_pins(self) -> list[NodePin]:
         return self._inputs
@@ -329,5 +330,6 @@ class CommonNode(Node):
             if not isinstance(pin, DataPin):
                 continue
             imgui.text(pin.name)
+            imgui.set_item_tooltip(pin.pin_tooltip)
             imgui.same_line()
             pin.render_edit_details()
