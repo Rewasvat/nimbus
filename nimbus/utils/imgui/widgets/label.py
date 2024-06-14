@@ -2,6 +2,7 @@ import re
 import nimbus.utils.imgui.type_editor as types
 from nimbus.utils.imgui.widgets.base import LeafWidget
 from nimbus.utils.imgui.colors import Colors, Color
+from nimbus.utils.imgui.nodes_common import input_property
 from imgui_bundle import imgui, ImVec2
 from enum import Enum
 
@@ -24,29 +25,19 @@ class TextMixin:
     """Simple text widget."""
 
     def __init__(self, text: str = ""):
-        self._text = text
-        self._text_color = Colors.white
+        self.text = text
         self._wrapped = False
         self._align: TextAlignment = TextAlignment.CENTER
-        self._scale: float = 1.0
 
-    @types.string_property()
-    def text(self):
+    @input_property()
+    def text(self) -> str:
         """The text being displayed [GET/SET]"""
-        return self._text
+        return ""  # this is essentially the default value.
 
-    @text.setter
-    def text(self, value: str):
-        self._text = value
-
-    @types.color_property()
-    def text_color(self):
+    @input_property()
+    def text_color(self) -> Color:
         """The color of the text [GET/SET]"""
-        return self._text_color
-
-    @text_color.setter
-    def text_color(self, value: Color):
-        self._text_color = value
+        return Colors.white  # this is essentially the default value.
 
     @types.bool_property()
     def is_wrapped(self):
@@ -66,8 +57,8 @@ class TextMixin:
     def align(self, value: TextAlignment):
         self._align = value
 
-    @types.float_property(min=0.0, max=2.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
-    def scale(self):
+    @input_property(min=0.0, max=2.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    def scale(self) -> float:
         """The scale of the text. [GET/SET]
         * 0 (min): impossible. Since we can't have scale=0, at this value scale will behave as if it was =1.
         * close to 0: theoretical min size possible, pratically invisible/unreadable.
@@ -78,15 +69,11 @@ class TextMixin:
 
         Note that scaling won't work properly when text is long, since its regular size might already match our slot size.
         """
-        return self._scale
-
-    @scale.setter
-    def scale(self, value: float):
-        self._scale = value
+        return 1.0  # this is essentially the default value.
 
     def _draw_text(self):
         """Internal utility to render our label text."""
-        if self._text is not None and len(self._text) > 0:
+        if self.text is not None and len(self.text) > 0:
             text = self._format_text(self.text)
             area_size = imgui.get_content_region_avail()
             wrap_width = area_size.x if self._wrapped else 0

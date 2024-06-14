@@ -5,6 +5,7 @@ from nimbus.utils.imgui.widgets.rect import RectMixin
 from nimbus.utils.imgui.widgets.label import TextMixin
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.nodes_common import input_property
 from imgui_bundle import imgui
 from enum import Enum
 
@@ -41,7 +42,6 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         self._frame_color: Color = Colors.white
         self._frame_thickness: float = 5.0
         self._bar_type: BarType = BarType.HORIZONTAL
-        self._value: float = 0.0
         self._inner_hole_ratio: float = 0.0
 
     # Editable Properties
@@ -81,14 +81,10 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     def bar_type(self, value: BarType):
         self._bar_type = value
 
-    @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
+    @input_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def value(self) -> float:
-        """The current value of the bar [GET/SET]"""
-        return self._value
-
-    @value.setter
-    def value(self, value: float):
-        self._value = value
+        """The current value of the bar, in the range [0,1] [GET/SET]"""
+        return 0.0  # this is essentially the default value.
 
     @types.float_property(max=1.0, is_slider=True, flags=imgui.SliderFlags_.always_clamp)
     def inner_hole_ratio(self) -> float:
@@ -122,8 +118,8 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         bottom_right = self.bottom_right_pos
         draw.add_rect_filled(pos, bottom_right, self.color.u32, self.rounding, self._get_draw_flags())
 
-        hor_fraction = self._value if is_horizontal else 1.0
-        ver_fraction = self._value if (not is_horizontal) else 1.0
+        hor_fraction = self.value if is_horizontal else 1.0
+        ver_fraction = self.value if (not is_horizontal) else 1.0
         if is_inverted:
             bar_start_pos = pos + self._area * (1-hor_fraction, 1-ver_fraction)
             bar_end_pos = bottom_right
@@ -144,8 +140,8 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
 
         draw.add_circle_filled(center, radius, self.color.u32)
 
-        first_half = min(0.5, self._value) / 0.5
-        secnd_half = max(0, self._value - 0.5) / 0.5
+        first_half = min(0.5, self.value) / 0.5
+        secnd_half = max(0, self.value - 0.5) / 0.5
 
         if is_clockwise:
             draw.path_line_to(center - (0, radius))
@@ -179,4 +175,4 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         self._handle_interaction()
 
     def _format_text(self, text: str):
-        return self._substitute(text, {"value": self._value * 100})
+        return self._substitute(text, {"value": self.value * 100})

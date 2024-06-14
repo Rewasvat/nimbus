@@ -1,6 +1,7 @@
 import nimbus.utils.imgui.type_editor as types
 from nimbus.utils.imgui.widgets.base import LeafWidget
 from nimbus.utils.imgui.colors import Color, Colors
+from nimbus.utils.imgui.nodes_common import input_property
 from imgui_bundle import imgui
 
 
@@ -9,21 +10,17 @@ class RectMixin:
     """Widget mixin class to add Rect features to a widget."""
 
     def __init__(self, color: Color = None):
-        self._color = color or Colors.white
+        self.color = color
         self._rounding: float = 0.0
         self._is_top_left_round = False
         self._is_top_right_round = False
         self._is_bottom_right_round = False
         self._is_bottom_left_round = False
 
-    @types.color_property()
+    @input_property()
     def color(self) -> Color:
         """The color of this rect. [GET/SET]"""
-        return self._color
-
-    @color.setter
-    def color(self, value: Color):
-        self._color = value
+        return Colors.white
 
     @types.float_property(min=0, is_slider=True)
     def rounding(self):

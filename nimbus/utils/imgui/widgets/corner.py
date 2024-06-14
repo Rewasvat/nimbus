@@ -2,6 +2,7 @@ import nimbus.utils.imgui.type_editor as types
 from nimbus.utils.imgui.widgets.base import LeafWidget
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.nodes_common import input_property
 from imgui_bundle import imgui
 from enum import Enum
 
@@ -29,7 +30,6 @@ class Corner(LeafWidget):
         self._width_ratio: float = 0.5
         self._height_ratio: float = 0.5
         self._use_absolute_values: bool = False
-        self._color = Colors.white
 
     @types.enum_property()
     def type(self) -> CornerType:
@@ -75,14 +75,10 @@ class Corner(LeafWidget):
     def use_absolute_values(self, value: bool):
         self._use_absolute_values = value
 
-    @types.color_property()
+    @input_property()
     def color(self) -> Color:
         """The color of the corner [GET/SET]"""
-        return self._color
-
-    @color.setter
-    def color(self, value: Color):
-        self._color = value
+        return Colors.white
 
     @property
     def size(self):
