@@ -261,14 +261,6 @@ def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
 # TODO: suportar drag&drop pra mover widgets? simple (ou base) widgets seriam objetos moviveis, enquanto
 #   os "slots" pra filhos nos container widgets seriam os possiveis alvos pra drop.
 # TODO: suportar "temas" somehow? Daria pra ser só os temas da imgui? <ver Elbow>
-
-# ============== Sensor-enabled Widgets (tb genericas, mas separadas das widgets normais caso queira usar elas num app sem sensors)
-# TODO: [widget] SensorRect: 1 sensor, associa cor do rect ao state-color do sensor.
-# TODO: [widget] SensorLabel: 1 sensor, associa texto da label ao format() do sensor (possivelmente color tb?).
-# TODO: [widget] SensorButton: SensorRect+SensorLabel, usando mesmo sensor.
-# TODO: [widget] SensorBar: 1 sensor, associa percent_value do sensor à barra, somehow
-#   - deve envolver várias labels diferentes: limite min, limite max, valor min, valor max, valor atual, nome da bar
-
 # ============== LCARS Only: (?)
 # TODO: [widget] Communicator: que me lembro, eram puramente visuais (e com animação...)
 # TODO: [widget] MainControls: que me lembro, era uma coleção de vários botões em formatos diferentes.

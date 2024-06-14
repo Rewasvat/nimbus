@@ -159,5 +159,13 @@ class Print(Action):
 
 
 # TODO: criar as várias actions que já precisaremos de inicio
-# TODO: fazer as coisas pra conseguir pegar sensores e associar eles aos widgets/actions.
 # TODO: mudar design básico dos nodes, pra diferenciar entre Widgets, Actions, e provavelmente Sensors tb se ele for um node em si.
+# TODO: ver se dá pra fazer um decorator que ao ser posto numa function, cria uma action que:
+#   - recebe os mesmos params da func como inputs da action
+#      - principalmente, ver se isso funcionaria com métodos de classes, onde o `self` seria um input a receber tb.
+#   - tem os mesmos outputs como os return values da func
+#       - se for output tuple[a,b], separa em outputs diferentes
+#   - no execute, a action pega os inputs e passa e executa a func, seta os returns como outputs e vai embora.
+# TODO: criar action que só tem um unico DataPin de output do tipo T. Nenhum flow. seria action de criar um valor estatico.
+#   - teria que criar uma derivada pra cada tipo (cada tipo no TypeDatabase que não seja Noop) parece bom
+#   - seria melhor se der pra gerar essas classes automaticamente num FOR or something.
