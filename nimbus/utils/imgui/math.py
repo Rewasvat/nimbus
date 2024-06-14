@@ -42,6 +42,17 @@ class Vector2(ImVec2):
             return self.__class__(self.x * other, self.y * other)
         return self.__class__(self[0] * other[0], self[1] * other[1])
 
+    def __truediv__(self, other):
+        """DIVISION: returns a new Vector2 instance with our values and ``other`` divided.
+
+        ``other`` may be:
+        * scalar value (float, int): divide the X and Y to value.
+        * Vector2/ImVec2/tuples/list: divide our [0] to other[0], our [1] to other[1].
+        """
+        if isinstance(other, (float, int)):
+            return self.__class__(self.x / other, self.y / other)
+        return self.__class__(self[0] / other[0], self[1] / other[1])
+
     def length_squared(self):
         """Gets the sum of our components to the potency of 2."""
         return self.x ** 2 + self.y ** 2
@@ -128,7 +139,7 @@ class Rectangle:
     Contains methods and properties related to rectangle math.
     """
 
-    def __init__(self, pos: Vector2, size: Vector2):
+    def __init__(self, pos: Vector2 = (0, 0), size: Vector2 = (0, 0)):
         self._pos = Vector2(*pos)
         self._size = Vector2(*size)
 
@@ -171,13 +182,46 @@ class Rectangle:
         return self._pos + self._size
 
     @property
+    def center(self):
+        """The position of this rect's center point. [GET]"""
+        return self._pos + self._size * 0.5
+
+    @property
     def as_imvec4(self) -> ImVec4:
         """Returns this rectangle as a ``ImVec4(pos.x, pos.y, width, height)`` instance."""
         return ImVec4(self._pos.x, self._pos.y, self._size.x, self._size.y)
 
+    def __add__(self, other):
+        if isinstance(other, Vector2):
+            pos = self.position.min(other)
+            size = self.bottom_right_pos.max(other) - pos
+        elif isinstance(other, Rectangle):
+            pos = self.position.min(other.position)
+            size = self.bottom_right_pos.max(other.bottom_right_pos) - pos
+        return Rectangle(pos, size)
+
+    def __contains__(self, other):
+        if isinstance(other, Vector2):
+            return (self.position.x <= other.x <= self.bottom_right_pos.x) and (self.position.y <= other.y <= self.bottom_right_pos.y)
+        elif isinstance(other, Rectangle):
+            return (other.position in self) and (other.bottom_right_pos in self)
+        return False
+
     def copy(self):
         """Returns a new rectangle instance with the same values as this one."""
         return type(self)(self._pos, self._size)
+
+    def expand(self, amount: float):
+        """Expands this rectangle in-place, to all directions by the given amount.
+
+        This changes position and size. Position essentially expands the rect in left/top directions,
+        while size is right/bottom directions.
+
+        Args:
+            amount (float): amount to expand the rectangle in all directions.
+        """
+        self._pos -= amount
+        self._size += amount * 2  # x2 to compensante for position receding, and the expected amount increase.
 
 
 def lerp[T](a: T, b: T, f: float, clamp=False) -> T:
