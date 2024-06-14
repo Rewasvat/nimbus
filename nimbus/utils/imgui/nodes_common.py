@@ -11,8 +11,6 @@ from nimbus.utils.imgui.general import menu_item, not_user_creatable
 
 
 # TODO: permitir tipo generic (qualquer coisa), consegue linkar com qualquer outro DataPin
-# TODO: pins de input string devem aceitar qualquer coisa (da pra fazer str(value) pra qualquer value)
-# TODO: pins de input bool devem aceitar qualquer coisa (qualquer objeto tem valor booleano).
 class DataPin(NodePin):
     """A DataPin for nodes.
 
@@ -33,6 +31,11 @@ class DataPin(NodePin):
         self.value_type = value_type
         self._pin_tooltip: str = None
         self._editor: types.TypeEditor = None
+        self._property: NodeDataProperty = None
+        """The NodeDataProperty of our parent node that created this pin.
+
+        Remember that a Property object belongs to the class, not to the individual instance.
+        """
         self.setup_editor()
 
     @property
@@ -64,6 +67,14 @@ class DataPin(NodePin):
         if self.pin_kind == PinKind.input:
             imgui.text_unformatted(self.name)
 
+    @property
+    def accepts_any_as_input(self) -> bool:
+        """If this Input DataPin can accept links to any other DataPin, regardless of their value-type.
+
+        This only applies to input pins. Usually for types that can receive any kind of value, since they can
+        convert any value to their value-type (such as strings or booleans)."""
+        return self._editor and self._editor.can_accept_any_input
+
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
         if not ok:
@@ -73,10 +84,10 @@ class DataPin(NodePin):
         # Type Check: output-pin type must be same or subclass of input-pin type
         if self.pin_kind == PinKind.input:
             out_type = pin.value_type
-            in_type = self.value_type
+            in_type = self.value_type if not self.accepts_any_as_input else object
         else:
             out_type = self.value_type
-            in_type = pin.value_type
+            in_type = pin.value_type if not pin.accepts_any_as_input else object
         if not issubclass(out_type, in_type):
             return False, f"Can't pass '{out_type}' to '{in_type}'"
         # Logic in on_new_link_added ensures we only have 1 link, if we're a input pin.
@@ -84,22 +95,33 @@ class DataPin(NodePin):
 
     def get_value(self):
         """Gets the value of this DataPin. This can be:
-        * For OUTPUT Pins: return our ``value``.
+        * For OUTPUT Pins that are associated with a NodeDataProperty with use_prop_value=True: returns the property's value.
+        * For regular OUTPUT Pins: return our ``value``.
         * For INPUT Pins with a link to another data pin: return the value of the output pin we're linked to.
         * For INPUT Pins without a link: return our ``value``, which serves as a default value.
         """
         if self.pin_kind == PinKind.output:
+            if self._property and self._property.use_prop_value:
+                return self._property.get_prop_value(self.parent_node, type(self.parent_node))
             return self.value
         elif self.is_linked_to_any():
             link = self.get_all_links()[0]
-            return link.start_pin.get_value()
+            value = link.start_pin.get_value()
+            if self._editor and self._editor.convert_value_to_type:
+                value = self.value_type(value)
+            return value
         else:
             return self.value  # the input pin's default value
 
     def set_value(self, value):
         """Sets our value to the given object. This should be the same type as it's expected by this DataPin.
-        However, that isn't enforced."""
+        However, that isn't enforced.
+
+        If this pin is associated with a NodeDataProperty, will also set the value to the property.
+        """
         self.value = value
+        if self._property:
+            self._property.set_prop_value(self.parent_node, value)
 
     def setup_editor(self, editor: types.TypeEditor = None, data: dict = None):
         """Sets up our TypeEditor instance, used for editing this pin's value in IMGUI.
@@ -175,10 +197,18 @@ class NodeDataProperty(types.ImguiProperty):
         """Gets the DataPin class to use as pin for this property."""
         return self.metadata.get("pin_class", DataPin)
 
+    @property
+    def use_prop_value(self) -> bool:
+        """If this property, and our DataPin, should always get/set value from the property itself.
+
+        Instead of getting/setting from the DataPin, which is the default behavior so that common data-properties don't need to
+        implement proper getters/setters."""
+        return self.metadata.get("use_prop_value", False)
+
     def __get__(self, obj: Node, owner: type | None = None):
-        ret = super().__get__(obj, owner)
+        ret = self.get_prop_value(obj, owner)
         pin = self.get_pin(obj)
-        if pin:
+        if pin and not self.use_prop_value:
             return pin.get_value()
         return ret
 
@@ -186,6 +216,24 @@ class NodeDataProperty(types.ImguiProperty):
         pin = self.get_pin(obj)
         if pin:
             pin.set_value(value)
+            # DataPin.set_value should call self.set_prop_value().
+        else:
+            self.set_prop_value(obj, value)
+
+    def get_prop_value(self, obj: Node, owner: type | None = None):
+        """Calls this property's getter on obj, to get its value.
+
+        This is the property's common behavior (``return obj.property``).
+        The NodeDataProperty adds logic to the getter, which is not called here.
+        """
+        return super().__get__(obj, owner)
+
+    def set_prop_value(self, obj: Node, value):
+        """Calls this property's setter on obj to set the given value.
+
+        This is essentially calling ``obj.property = value``, with one important difference: this calls the BASE setter!
+        This does NOT call our associated DataPin ``set_value()`` method.
+        """
         if self.fset:
             return super().__set__(obj, value)
 
@@ -204,6 +252,7 @@ class NodeDataProperty(types.ImguiProperty):
             initial_value = super().__get__(obj, type(obj))
             pin = self.pin_class(obj, self.pin_kind, self.name, value_type, initial_value)
             pin.pin_tooltip = self.__doc__
+            pin._property = self
             pin.setup_editor(editor=self.get_editor(obj))
             pins[obj] = pin
         return pin
