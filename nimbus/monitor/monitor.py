@@ -15,10 +15,26 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
     """MONITOR COMMANDS"""
 
     def __init__(self):
-        self.computer: sensors.System = None
+        self._computer: sensors.System = None
         """Main System instance for querying hardware and sensor data. Use only after initializing this manager!"""
         cache = DataCache()
         cache.add_shutdown_listener(self.on_shutdown)
+
+    @property
+    def computer(self) -> sensors.System:
+        """Main System instance for querying hardware and sensor data.
+
+        If this Monitor wasn't initialized yet, this will call ``self.initialize()`` to do so in order
+        to create the System instance returned by this property. See ``initialize`` for more info.
+        """
+        if not self._computer:
+            self.initialize()
+        return self._computer
+
+    @property
+    def is_initialized(self):
+        """Checks if this MonitorManager is initialized."""
+        return self._computer is not None
 
     @cmd_utils.object_identifier
     def name(self):
@@ -34,9 +50,13 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
         monitor.run()
 
     def initialize(self):
-        """Initializes this manager."""
-        self.computer = sensors.System()
-        self.computer.open()
+        """Initializes this manager.
+
+        This creates our internal System instance (see ``self.computer``). This is an operation that can take a while to finish,
+        so if you're going to use the Sensor System, its best to call this initialize beforehand when loading.
+        """
+        self._computer = sensors.System()
+        self._computer.open()
 
     def on_shutdown(self):
         """Callback for when Nimbus is shutdown."""
@@ -116,12 +136,9 @@ class MonitorApp(windows.AppWindow):
         return super().on_before_exit()
 
     def update(self):
-        # TODO: update dos hardware era feito de forma async (no C#)
         io = imgui.get_io()
-        self.elapsed_time += io.delta_time
-        if self.elapsed_time >= self.data.update_time:
-            self.monitor.computer.update()
-            self.elapsed_time = 0
+        # TODO: precisa setar o update_time do computer.
+        self.monitor.computer.timed_update(io.delta_time)
 
     def render(self):
         self.update()
