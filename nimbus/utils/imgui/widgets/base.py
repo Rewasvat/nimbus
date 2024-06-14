@@ -1,13 +1,16 @@
 import click
-from typing import Iterator
+from typing import Iterator, TYPE_CHECKING
 from imgui_bundle import imgui, ImVec2
 import nimbus.utils.imgui.actions as actions
 from nimbus.utils.imgui.math import Vector2, Rectangle
 from nimbus.utils.imgui.colors import Colors, Color
-from nimbus.utils.imgui.general import not_user_creatable, menu_item, object_creation_menu
-from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind
+from nimbus.utils.imgui.general import not_user_creatable, menu_item
+from nimbus.utils.imgui.nodes import NodePin, NodeLink, PinKind
 from nimbus.utils.imgui.nodes_common import CommonNode
 import nimbus.utils.imgui.type_editor as types
+
+if TYPE_CHECKING:
+    from nimbus.utils.imgui.widgets.system import WidgetSystem
 
 
 def insert_base_init(sub_cls: type, base_cls: type):
@@ -56,7 +59,7 @@ class WidgetParentPin(NodePin):
 
     def draw_node_pin_contents(self):
         draw_widget_pin_icon(self.is_linked_to_any())
-        imgui.text("Parent")
+        imgui.text_unformatted("Parent")
 
     def __str__(self):
         return f"{self.parent_node} Parent Slot"
@@ -115,12 +118,12 @@ class BaseWidget(CommonNode):
         self._name = value
 
     @property
-    def system(self) -> 'WidgetSystem':
+    def system(self):
         """Root System managing this widget."""
         return self._system
 
     @system.setter
-    def system(self, value: 'WidgetSystem'):
+    def system(self, value):
         self._system = value
         self._on_system_changed()
 
@@ -296,12 +299,6 @@ class BaseWidget(CommonNode):
         Subclasses may override this to implement their own logic. Default implementation in BaseWidget does nothing.
         """
         pass
-
-    def get_input_pins(self) -> list[NodePin]:
-        """Gets list of all input pins in this widget. Used when the widget is represented in a Node Editor.
-        BaseWidget only returns our parent pin.
-        """
-        return [self.parent_pin]
 
     def __str__(self):
         return f"{self.id}:{self.name}"
@@ -665,228 +662,3 @@ class ContainerWidget(BaseWidget):
 
     def __iter__(self) -> Iterator[BaseWidget]:
         return iter(self.get_children())
-
-
-class SystemRootPin(NodePin):
-    """Node Pin for a WidgetSystem's Root widget."""
-
-    def __init__(self, parent: 'WidgetSystem'):
-        super().__init__(parent, PinKind.output)
-        self.parent_node: WidgetSystem = parent
-        self._child: BaseWidget = None
-        self.default_link_color = Colors.green  # same color used in draw_widget_pin_icon
-
-    @property
-    def child(self):
-        """Gets the widget that is set as the root of our WidgetSystem. [GET/SET]"""
-        return self._child
-
-    @child.setter
-    def child(self, value: BaseWidget):
-        if self._child == value:
-            return
-        if self._child and self.is_linked_to(self._child.parent_pin):
-            self.remove_link_to(self._child.parent_pin)
-        self._child = value
-        if value:
-            value.reparent_to(None)  # root widgets have no Slot parent.
-            if not self.is_linked_to(value.parent_pin):
-                self.link_to(value.parent_pin)
-
-    def draw_node_pin_contents(self):
-        imgui.text("Root")
-        draw_widget_pin_icon(self.is_linked_to_any())
-
-    def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
-        ok, msg = super().can_link_to(pin)
-        if not ok:
-            return ok, msg
-        if not isinstance(pin, WidgetParentPin):
-            return False, "Can only link to a Widget's Parent pin."
-        return True, "success"
-
-    def on_new_link_added(self, link: NodeLink):
-        # kinda the same as in the Slot class
-        self.child = link.end_pin.parent_node
-
-    def on_link_removed(self, link: NodeLink):
-        self.child = None
-
-
-class WidgetSystem(Node):
-    """Root object managing a Widget and Action hierarchy."""
-
-    def __init__(self, name: str):
-        super().__init__()
-        self.name = name
-        self.widgets: dict[str, BaseWidget] = {}
-        self.root = SystemRootPin(self)
-        self.edit_enabled = True
-        self.edit_window_title = "Edit Widgets System"
-        self.can_be_deleted = False
-        self._output_pins = [
-            self.root,
-            actions.ActionFlow(self, PinKind.output, "Test")
-        ]
-        self.node_editor = NodeEditor(self.render_node_editor_context_menu)
-        self.node_editor.nodes.append(self)
-
-    def render(self):
-        imgui.begin_child("AppRootWidget")
-        if self.root.child is not None:
-            self.root.child._set_pos_and_size()
-            self.root.child.render()
-        else:
-            if self.edit_enabled and imgui.begin_popup_context_window("CreateRootWidgetMenu"):
-                imgui.text("Create Root Widget:")
-                self.render_create_widget_menu()
-                imgui.end_popup()
-        imgui.end_child()
-
-        if not self.edit_enabled:
-            if imgui.begin_popup("AppRootNoEditMenu"):
-                if imgui.button("Open EDIT Mode?"):
-                    self.edit_enabled = True
-                # TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
-                # TODO: opcao pra abrir edit em cima do render-widgets, tipo um overlay (nao abre outra janela, mostra widgets)
-                lines = [
-                    "EDIT Mode opens a separate window for editing your widget settings,",
-                    "and allow right-click interaction with some widgets.",
-                    "\n\nClose the EDIT window to close the EDIT Mode and go back to normal widgets display."
-                ]
-                imgui.set_item_tooltip(" ".join(lines))
-                imgui.end_popup()
-            if imgui.is_mouse_clicked(imgui.MouseButton_.right):
-                # NOTE: For some reason, the `imgui.begin_popup_context_*` functions were not working here...
-                # Had to do this to open the popup manually.
-                imgui.open_popup("AppRootNoEditMenu", imgui.PopupFlags_.mouse_button_right)
-        else:
-            edit_window_flags = imgui.WindowFlags_.no_collapse
-            opened, self.edit_enabled = imgui.begin(self.edit_window_title, self.edit_enabled, edit_window_flags)
-            if opened:
-                self.render_edit_window()
-            imgui.end()
-
-    def render_edit_window(self):
-        """Renders the contents of the system edit window."""
-        self.node_editor.render_system()
-
-    def load(self):
-        # TODO
-        pass
-
-    def save(self):
-        # TODO
-        pass
-
-    def register_widget(self, widget: BaseWidget):
-        """Registers the given widget with this system.
-
-        Sets the widget's root system as this system, and adds it to our table of widgets.
-        If we didn't have a root widget, this widget will be set as the root.
-
-        Args:
-            widget (BaseWidget): the widget to register
-
-        Returns:
-            bool: True if the widget was successfully registered to us, or was already registered to us.
-            False otherwise (a different widget with same ID already exists).
-        """
-        if widget.id in self.widgets:
-            return self.widgets[widget.id] == widget
-        if widget.system is not None:
-            widget.system.deregister_widget(widget)
-        widget.system = self
-        self.widgets[widget.id] = widget
-        self.node_editor.nodes.append(widget)
-        if self.root.child is None:
-            self.root.child = widget
-        return True
-
-    def deregister_widget(self, widget: BaseWidget):
-        """Deregisters the given widget from this system.
-
-        This should only be used internally by ``register_widget()`` when change a widget between systems,
-        since a widget without a root system may lead to errors.
-        This sets ``widget.system = None``.
-
-        Args:
-            widget (BaseWidget): the widget to remove.
-
-        Returns:
-            bool: True if the widget was successfully deregistered from us.
-            False otherwise (widget was not registered to us).
-        """
-        if widget.system != self or widget.id not in self.widgets:
-            return False
-        if self.widgets[widget.id] != widget:
-            return False
-        self.widgets.pop(widget.id)
-        self.node_editor.nodes.remove(widget)
-        widget.system = None
-        if self.root.child == widget:
-            self.root.child = None
-        return True
-
-    def render_create_widget_menu(self, accepted_bases: list[type[BaseWidget]] = [BaseWidget]) -> BaseWidget | None:
-        """Renders the contents for a menu that allows the user to create a new widget, given the possible options.
-
-        Args:
-            accepted_bases (list[type[BaseWidget]]): list of base types accepted as the options of new widgets to create.
-            The menu will search for all possible subclasses of these given accepted types and display them for selection.
-            Options in the menu are organized following the same tree-hierarchy as the classes themselves.
-            Classes marked with the ``@not_user_creatable`` decorator will won't be allowed to be created by the user, but their subclasses may.
-            The default list of ``[BaseWidget]`` basically allows all widgets since the only base is the base for all widgets.
-
-        Returns:
-            BaseWidget: the newly created instance of a widget, if any. None otherwise.
-            Any created widget is auto-registered with this system.
-        """
-        new_child = None
-        for cls in accepted_bases:
-            new_child = object_creation_menu(cls, lambda cls: cls.__name__.replace("Widget", ""))
-            if new_child is not None:
-                break
-        if new_child:
-            self.register_widget(new_child)
-        return new_child
-
-    def render_create_action_menu(self) -> actions.Action | None:
-        """Renders the contents for a menu that allows the user to create a new action, given the possible options.
-
-        Returns:
-            Action: the newly created instance of a action, if any. None otherwise.
-        """
-        new_action: actions.Action = object_creation_menu(actions.Action)
-        if new_action:
-            self.node_editor.nodes.append(new_action)
-        return new_action
-
-    def render_node_editor_context_menu(self, linked_to_pin: NodePin):
-        """Context-menu contents for the node-editor's background menu.
-
-        This is used when right-clicking the editor's background or pulling a link to create a new node.
-        This is usually used as a menu to create a new node.
-
-        Args:
-            linked_to_pin (NodePin): If given, this is the pin from which the user pulled a link to
-            create a new node. So it can be used to limit the contents of the menu, or of which new nodes can be created.
-            The NodeEditor will take care of properly positioning the new node and linking it to this pin.
-
-        Returns:
-            Node: the new node that was created, if any new node was created.
-        """
-        if isinstance(linked_to_pin, Slot):
-            return self.render_create_widget_menu(linked_to_pin.accepted_child_types)
-        if isinstance(linked_to_pin, actions.ActionFlow):
-            return self.render_create_action_menu()
-        else:
-            new_widget = self.render_create_widget_menu()
-            new_action = self.render_create_action_menu()
-            return new_widget or new_action
-
-    def get_output_pins(self) -> list[NodePin]:
-        return self._output_pins
-
-    def __str__(self):
-        return f"Widget System: {self.name}"
