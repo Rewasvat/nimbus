@@ -49,14 +49,18 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
         monitor = MonitorApp()
         monitor.run()
 
-    def initialize(self):
+    def initialize(self, dummy=False):
         """Initializes this manager.
 
         This creates our internal System instance (see ``self.computer``). This is an operation that can take a while to finish,
         so if you're going to use the Sensor System, its best to call this initialize beforehand when loading.
+
+        Args:
+            dummy (bool, optional): If true, will use a dummy internal Computer object, with dummy sensors that simulate actual
+            sensors with changing values, for testing sensor-related code without needing to load sensors properly. Defaults to False.
         """
         self._computer = sensors.System()
-        self._computer.open()
+        self._computer.open(dummy_test=dummy)
 
     def on_shutdown(self):
         """Callback for when Nimbus is shutdown."""
@@ -72,8 +76,11 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
             print(sensor.format("{id} ({unit}) = {limits}"))
 
     @cmd_utils.instance_command()
-    def widgets(self):
+    @click.option("--test", "-t", is_flag=True, help="Use dummy testing sensors")
+    def widgets(self, test):
         """Opens a debug GUI for testing the Widget System."""
+        if test:
+            self.initialize(True)
         app = WidgetsTestApp()
         app.run()
 

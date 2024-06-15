@@ -5,10 +5,11 @@ import itertools
 from enum import Enum
 from dataclasses import dataclass
 from typing import Iterator
-from nimbus.monitor.native_api import SensorType, all_sensor_types, ISensor, Computer
+from nimbus.monitor.native_api import SensorType, ISensor, Computer
+from nimbus.monitor.test_sensor import TestIHardware, TestIComputer
 from nimbus.utils.imgui.math import Vector2, multiple_lerp_with_weigths
 from nimbus.utils.imgui.colors import Colors, Color
-from nimbus.utils.imgui.nodes import Node, NodePin, PinKind
+from nimbus.utils.imgui.nodes import PinKind
 from nimbus.utils.imgui.nodes_common import CommonNode, input_property, output_property
 from nimbus.utils.imgui.actions import ActionFlow
 
@@ -16,12 +17,6 @@ from nimbus.utils.imgui.actions import ActionFlow
 # Local implementation of classes wrapping C# types.
 # This is to allow us some documentation (intellisense) and some custom logic/API of ours.
 
-# TODO: criar "TestSensor"! Um objeto Sensor, como os outros, só que associado a um hardware de "teste".
-#   - ele sempre existe no System, não precisa carregar computer pra ele existir.
-#   - ao ser atualizado, ele escolhe valores aleatórios. Ou fica ciclando entre o min/max.
-#   - isso seria util pra ficar testando coisas que dependem de valores e tal vindo dos sensores, como os widgets.
-#   - seria bom o MonitorManager ter um jeito de criar o computer e forcar o lazy-load nunca inicializar ele, quando quisermos só esse
-#     TestSensor pra testar coisas.
 # TODO: update dos hardware era feito de forma async (no C#)
 class System:
     """Represents the Computer (or System) we're running from.
@@ -40,9 +35,17 @@ class System:
         self.update_time: float = 1.0
         """Amount of time that must pass for a ``timed_update()`` call to trigger an actual ``update()`` (in seconds)."""
 
-    def open(self):
-        """Starts the computer object, allowing us to query its hardware, sensors and more."""
-        self._pc = Computer()
+    def open(self, dummy_test=False):
+        """Starts the computer object, allowing us to query its hardware, sensors and more.
+
+        Args:
+            dummy_test (bool, optional): If true, will use a dummy internal Computer object, with dummy sensors that simulate actual
+            sensors with changing values, for testing sensor-related code without needing to load sensors properly. Defaults to False.
+        """
+        if dummy_test:
+            self._pc = TestIComputer()
+        else:
+            self._pc = Computer()
         self._pc.IsCpuEnabled = True
         self._pc.IsGpuEnabled = True
         self._pc.IsMemoryEnabled = True
@@ -56,6 +59,8 @@ class System:
 
         for hw in self._pc.Hardware:
             self.hardwares.append(Hardware(hw))
+        if not dummy_test:
+            self.hardwares.append(Hardware(TestIHardware()))
 
         self.all_sensors = {sensor.id: sensor for sensor in self.get_all_sensors()}
 
@@ -554,16 +559,20 @@ class Sensor(CommonNode):
 
     def _get_critical_limits(self):
         """Internal method to try to get the sensor's limits from the ICriticalSensorLimits interface."""
-        if hasattr(self._sensor, "CriticalLowLimit"):
+        low = getattr(self._sensor, "CriticalLowLimit", None)
+        high = getattr(self._sensor, "CriticalHighLimit", None)
+        if low is not None and high is not None:
             # TODO: in C#, we used to cast the ISensor object to ICriticalSensorLimits to see if we could access these attributes.
             #   maybe should've done something like that here? Not sure if this `hasattr` method works...
             #   On the other hand, apparently no sensors implement the Limits interfaces anyway...
-            return Vector2(self._sensor.CriticalLowLimit, self._sensor.CriticalHighLimit)
+            return Vector2(low, high)
 
     def _get_basic_limits(self):
         """Internal method to try to get the sensor's limits from the ISensorLimits interface."""
-        if hasattr(self._sensor, "LowLimit"):
-            return Vector2(self._sensor.LowLimit, self._sensor.HighLimit)
+        low = getattr(self._sensor, "LowLimit", None)
+        high = getattr(self._sensor, "HighLimit", None)
+        if low is not None and high is not None:
+            return Vector2(low, high)
 
     def _get_custom_limits(self):
         """Internal method to get the sensor's custom (FIXED) limits."""
@@ -637,7 +646,6 @@ class Sensor(CommonNode):
             targets = [
                 (Colors.magenta, 0),
                 (Colors.green, 0.0001),
-                (Colors.white, 0.5),
                 (Colors.yellow, 0.75),
                 (Colors.red, 1),
             ]
@@ -645,14 +653,12 @@ class Sensor(CommonNode):
             targets = [
                 (Colors.red, 0),
                 (Colors.green, 0.001),
-                (Colors.white, 0.5),
                 (Colors.yellow, 0.75),
                 (Colors.red, 1),
             ]
         elif self.unit in (SensorUnit.POWER, SensorUnit.VOLTAGE, SensorUnit.CURRENT):
             targets = [
                 (Colors.green, 0),
-                (Colors.white, 0.5),
                 (Colors.yellow, 0.75),
                 (Colors.red, 1),
             ]
