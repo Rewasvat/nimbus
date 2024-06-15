@@ -38,30 +38,20 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         RectMixin.__init__(self)
         TextMixin.__init__(self)
         self.color = Colors.grey
-        self._bar_color: Color = Colors.yellow
-        self._frame_color: Color = Colors.white
         self._frame_thickness: float = 5.0
         self._bar_type: BarType = BarType.HORIZONTAL
         self._inner_hole_ratio: float = 0.0
 
     # Editable Properties
-    @types.color_property()
+    @input_property()
     def bar_color(self) -> Color:
         """The color of the bar fill. [GET/SET]"""
-        return self._bar_color
+        return Colors.yellow
 
-    @bar_color.setter
-    def bar_color(self, value: Color):
-        self._bar_color = value
-
-    @types.color_property()
+    @input_property()
     def frame_color(self) -> Color:
         """The color of the bar frame outline. [GET/SET]"""
-        return self._frame_color
-
-    @frame_color.setter
-    def frame_color(self, value: Color):
-        self._frame_color = value
+        return Colors.white
 
     @types.float_property()
     def frame_thickness(self) -> float:
@@ -126,9 +116,9 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         else:
             bar_start_pos = pos
             bar_end_pos = pos + self._area * (hor_fraction, ver_fraction)
-        draw.add_rect_filled(bar_start_pos, bar_end_pos, self._bar_color.u32, self.rounding, self._get_draw_flags())
+        draw.add_rect_filled(bar_start_pos, bar_end_pos, self.bar_color.u32, self.rounding, self._get_draw_flags())
 
-        draw.add_rect(pos, bottom_right, self._frame_color.u32, self.rounding, self._get_draw_flags(), self._frame_thickness)
+        draw.add_rect(pos, bottom_right, self.frame_color.u32, self.rounding, self._get_draw_flags(), self._frame_thickness)
 
     def _draw_circle_bar(self):
         """Draws the circle-type bars."""
@@ -151,7 +141,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
             draw.path_line_to(center + Vector2.from_angle(angle) * radius)
             draw.path_arc_to(center, radius, angle, math.pi*1.5)
         draw.path_line_to(center)
-        draw.path_fill_convex(self._bar_color.u32)
+        draw.path_fill_convex(self.bar_color.u32)
 
         if secnd_half > 0:
             if is_clockwise:
@@ -162,12 +152,12 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
                 draw.path_line_to(center + Vector2.from_angle(angle) * radius)
                 draw.path_arc_to(center, radius, angle, math.pi*0.5)
             draw.path_line_to(center)
-            draw.path_fill_convex(self._bar_color.u32)
+            draw.path_fill_convex(self.bar_color.u32)
 
         if self._inner_hole_ratio > 0:
             draw.add_circle_filled(center, radius*self._inner_hole_ratio, Colors.background.u32)
-            draw.add_circle(center, radius*self._inner_hole_ratio, self._frame_color.u32, thickness=self._frame_thickness)
-        draw.add_circle(center, radius, self._frame_color.u32, thickness=self._frame_thickness)
+            draw.add_circle(center, radius*self._inner_hole_ratio, self.frame_color.u32, thickness=self._frame_thickness)
+        draw.add_circle(center, radius, self.frame_color.u32, thickness=self._frame_thickness)
 
     # Method Overrides
     def render(self):

@@ -38,7 +38,7 @@ def draw_widget_pin_icon(is_filled):
         is_filled (bool): if the icon should be filled. This should be true if the widget pin is connected.
     """
     draw = imgui.get_window_draw_list()
-    size = imgui.get_text_line_height()  # 24  # from node examples
+    size = imgui.get_text_line_height()
     p1 = Vector2.from_cursor_screen_pos()
     p2 = p1 + (size, size * 0.5)
     p3 = p1 + (0, size)
