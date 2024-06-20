@@ -157,9 +157,6 @@ class BaseWidget(CommonNode):
         """
         return self
 
-    def __init_subclass__(cls) -> None:
-        insert_base_init(cls, BaseWidget)
-
     def render(self):
         """Renders this widget through imgui.
 
@@ -307,12 +304,6 @@ class LeafWidget(BaseWidget):
 
     NOTE: this class automatically sets up ``__init__()`` in sub-classes to call the initializer of this class before.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __init_subclass__(cls) -> None:
-        insert_base_init(cls, LeafWidget)
 
 
 class Slot(NodePin):
@@ -534,9 +525,6 @@ class ContainerWidget(BaseWidget):
         self.accepts_new_slots = True
         """If user-interaction (while editing) can add new slots to this container."""
         self._edit_slot_header_color = Color(0.1, 0.5, 0.3, 1)
-
-    def __init_subclass__(cls) -> None:
-        insert_base_init(cls, ContainerWidget)
 
     @property
     def slots(self):

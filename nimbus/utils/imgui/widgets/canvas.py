@@ -53,6 +53,7 @@ class Canvas(ContainerWidget):
     """
 
     def __init__(self):
+        super().__init__()
         self._slot_class = CanvasSlot
 
     def update_slots(self):

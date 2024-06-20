@@ -35,6 +35,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
     """
 
     def __init__(self):
+        LeafWidget.__init__(self)
         RectMixin.__init__(self)
         TextMixin.__init__(self)
         self.color = Colors.grey

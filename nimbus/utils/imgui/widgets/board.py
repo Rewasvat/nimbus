@@ -37,6 +37,7 @@ class Board(ContainerWidget):
     """
 
     def __init__(self, names: list[str] = None):
+        super().__init__()
         self._slot_class = BoardSlot
         self._slots = [BoardSlot(self, name) for name in (names or ["Default"])]
         self.slot_counter = len(self._slots)

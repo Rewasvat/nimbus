@@ -31,6 +31,7 @@ class Panel(ContainerWidget):
     """
 
     def __init__(self):
+        super().__init__()
         self.accepts_new_slots = False
         base_names = ["CornerTopLeft", "CornerTopRight", "CornerBottomLeft", "CornerBottomRight"]
         self._fixed_slots = [Slot(self, name) for name in base_names]

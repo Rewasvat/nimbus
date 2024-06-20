@@ -13,6 +13,7 @@ class Button(RectMixin, TextMixin, LeafWidget):
     """
 
     def __init__(self):
+        LeafWidget.__init__(self)
         RectMixin.__init__(self)
         TextMixin.__init__(self)
         self._on_clicked = actions.ActionFlow(self, nodes.PinKind.output, "On Click")

@@ -21,6 +21,7 @@ class TextAlignment(Enum):
 
 
 # TODO: implementar margin pra renderizar texto pouco mais longe das bordas qdo não no CENTER
+# TODO: fazer funcionar quando tiver \n no texto pra quebrar em 2 linhas
 class TextMixin:
     """Simple text widget."""
 
@@ -179,6 +180,7 @@ class Label(TextMixin, LeafWidget):
     """Simple text widget."""
 
     def __init__(self, text: str = ""):
+        LeafWidget.__init__(self)
         TextMixin.__init__(self, text)
 
     def render(self):

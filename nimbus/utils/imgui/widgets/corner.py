@@ -26,6 +26,7 @@ class Corner(LeafWidget):
     """
 
     def __init__(self, type=CornerType.TOP_LEFT):
+        super().__init__()
         self._type: CornerType = type
         self._width_ratio: float = 0.5
         self._height_ratio: float = 0.5

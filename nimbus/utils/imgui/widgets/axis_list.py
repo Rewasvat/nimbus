@@ -43,6 +43,7 @@ class AxisList(ContainerWidget):
     """
 
     def __init__(self, slices: list[float] = None, is_horizontal=False):
+        super().__init__()
         if slices is None or len(slices) <= 0:
             slices = [1.0]
         self._slot_class = AxisListSlot
