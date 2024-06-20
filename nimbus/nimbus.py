@@ -33,6 +33,18 @@ class NimbusCommands:
         """Gets the command objects."""
         return self.command_objects
 
+    @cmd_utils.group_callback
+    def on_group_callback(self, ctx: click.Context, debug):
+        """Group callback, called when a subcommand/subgroup is executed or if this group is executed as a
+        command (and has invoke_without_command=True)."""
+        if debug:
+            import debugpy
+            port = 5678
+            debugpy.listen(port)
+            click.secho(f"[DEBUGGER] Waiting connection at port {port}...", fg="magenta")
+            debugpy.wait_for_client()
+            click.secho("[DEBUGGER] CONNECTED!", fg="magenta")
+
     @cmd_utils.result_callback
     def finalize(self, result, **kwargs):
         """Handles processing performed *after* the group has executed its desired command(s)."""
@@ -40,5 +52,10 @@ class NimbusCommands:
         data.shutdown()
 
 
+debug_help = "Initializes Nimbus with Python Debugger (debugpy) active, "
+debug_help += "listening in localhost at port 5678."
+
 main = cmd_utils.DynamicGroup(NimbusCommands(), "nimbus", context_settings={"help_option_names": ["-h", "--help"]})
+# TODO: idealmente essa debug option devia ser definida junto com o on_group_callback lá.
+click.option("-d", "--debug", is_flag=True, help=debug_help)(main)
 click.version_option()(main)
