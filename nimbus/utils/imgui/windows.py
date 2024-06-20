@@ -1,3 +1,5 @@
+import os
+import json
 import click
 from enum import Enum
 from nimbus.data import DataCache
@@ -181,10 +183,21 @@ class AppWindow(BasicWindow):
         # node_config.settings_file = ""
         addons.with_node_editor_config = node_config
 
+        node_data = cache.get_data(self.get_node_settings_key())
+        if node_data is not None:
+            node_data_path = immapp.immapp_cpp.node_editor_settings_location(run_params)
+            with open(node_data_path, "w") as f:
+                json.dump(node_data, f)
+            click.secho(f"Loaded IMGUI Node Editor Settings from cache. Using temp json file '{node_data_path}'", fg="green")
+        else:
+            click.secho("Couln't load IMGUI Node Editor Settings from cache", fg="yellow")
+
         immapp.run(
             runner_params=run_params,
             add_ons_params=addons
         )
+
+        self.store_settings_on_cache()
 
     def render_status_bar(self):
         """Renders the contents of the window's bottom status-bar, if its enabled(see `self.show_status_bar`)
@@ -227,18 +240,45 @@ class AppWindow(BasicWindow):
         This is called when the window is closed and thus the app window will exit. The ``self.run()`` method that was blocking will finally continue.
         When this happens, imgui (and components, backend, etc) still exist.
 
-        Sub classes may override this to add their own exit logic. The default implementation saves the Imgui settings data into our DataCache.
+        Sub classes may override this to add their own exit logic. The default implementation does nothing.
         """
+        pass
+
+    def store_settings_on_cache(self):
+        """Stores the IMGUI settings files in the DataCache, and removes them from the disk.
+
+        IMGUI (and separately the imgui-node-editor) generate a specific ``.ini`` (``.json`` for node-editor) file when it runs.
+        By default, the file is located in the current working dir of the application/CLI command that created the IMGUI Window/imgui-node-editor.
+        These files store state-data and user-settings about IMGUI.
+
+        This method reads these files contents, and stores them in our DataCache and them removes the files. The cached data is keyed to
+        this AppWindow (by name). When this AppWindow is ``run()``, it recreates these files from the cached data so that IMGUI works as
+        expected since the last execution. This way, IMGUI works as expected across multiple runs and the disk remains clean of generated
+        file clutter.
+        """
+        cache = DataCache()
+        # Store and remove INI Settings file
         run_params = hello_imgui.get_runner_params()
         ini_path = hello_imgui.ini_settings_location(run_params)
-
-        cache = DataCache()
-        with open(ini_path) as f:
-            settings_data = f.read()
-            cache.set_data(self.get_settings_key(), settings_data)
-        click.secho(f"Saved IMGUI Settings from '{ini_path}' to cache.", fg="green")
-
-        hello_imgui.delete_ini_settings(run_params)
+        if os.path.isfile(ini_path):
+            with open(ini_path) as f:
+                settings_data = f.read()
+                cache.set_data(self.get_settings_key(), settings_data)
+            click.secho(f"Saved IMGUI Settings from '{ini_path}' to cache.", fg="green")
+            hello_imgui.delete_ini_settings(run_params)
+        else:
+            click.secho(f"Couldn't find IMGUI Settings file '{ini_path}' to store in the cache.", fg="yellow")
+        # Store and remove NodeEditor json file
+        node_data_path = immapp.immapp_cpp.node_editor_settings_location(run_params)
+        if os.path.isfile(node_data_path):
+            with open(node_data_path, "r") as f:
+                node_data = json.load(f)
+                cache.set_data(self.get_node_settings_key(), node_data)
+            click.secho(f"Saved IMGUI Node Editor Settings from '{node_data_path}' to cache.", fg="green")
+            immapp.immapp_cpp.delete_node_editor_settings(run_params)
+            os.remove(node_data_path)
+        else:
+            click.secho(f"Couldn't find IMGUI Node Editor Settings file '{node_data_path}' to store in the cache.", fg="yellow")
 
     def get_settings_key(self) -> str:
         """Gets the DataCache key for this window's imgui settings data.
@@ -247,3 +287,21 @@ class AppWindow(BasicWindow):
             str: the key for accesing the window's settings data in `cache.get_data(key)`.
         """
         return f"ImguiIniData_{self.label}"
+
+    def get_node_settings_key(self) -> str:
+        """Gets the DataCache key for this window's imgui-node-editor settings data.
+
+        Returns:
+            str: the key for accesing the window's node settings data in `cache.get_data(key)`.
+        """
+        return f"ImguiNodeData_{self.label}"
+
+    def close(self):
+        """Closes this window.
+
+        Implementation-wise, this marks the window for exiting on the next frame.
+        The usual exiting logic will be executed (such as our ``self.on_before_exit()`` callback),
+        and the ``self.run()`` call that was blocking will finish.
+        """
+        run_params = hello_imgui.get_runner_params()
+        run_params.app_shall_exit = True
