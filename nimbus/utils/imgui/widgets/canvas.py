@@ -20,11 +20,11 @@ class CanvasSlot(Slot):
     @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
         """Name of this slot. User can change this, but it should be unique amongst all slots of this container. [GET/SET]"""
-        return self._name
+        return self.pin_name
 
     @name.setter
     def name(self, value):
-        self._name = value
+        self.pin_name = value
 
     @types.vector2_property(x_range=(0, 1), y_range=(0, 1), flags=imgui.SliderFlags_.always_clamp)
     def position(self) -> Vector2:

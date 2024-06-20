@@ -15,16 +15,16 @@ class ActionFlow(NodePin):
 
     When a action executes, it triggers some of its output flow pins. These will then
     trigger the input-flow pins they're connected to, thus triggering those pin's actions.
+
+    Input Flow pins are expected to be in Action nodes, for triggering them.
+    Output Flow pins however may be present in any kind of nodes, as other sources of flow execution.
     """
 
     def __init__(self, parent: Node, kind: PinKind, name="FLOW"):
-        super().__init__(parent, kind)
+        super().__init__(parent, kind, name)
         self.parent_node: Action = parent  # to update type-hint.
-        self.name = name
 
     def draw_node_pin_contents(self):
-        if self.pin_kind == PinKind.output:
-            imgui.text_unformatted(self.name)
         draw = imgui.get_window_draw_list()
         size = imgui.get_text_line_height()
         p1 = Vector2.from_cursor_screen_pos()
@@ -41,8 +41,6 @@ class ActionFlow(NodePin):
             thickness = 2
             draw.path_stroke(color, thickness=thickness)
         imgui.dummy((size, size))
-        if self.pin_kind == PinKind.input:
-            imgui.text_unformatted(self.name)
 
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
@@ -89,7 +87,7 @@ class ActionFlow(NodePin):
         imgui.set_item_tooltip(self._draw_test_trigger_menu_item.__doc__)
 
     def __str__(self):
-        return f"{self.pin_kind.name.capitalize()} ActionFlow {self.name}"
+        return f"{self.pin_kind.name.capitalize()} ActionFlow {self.pin_name}"
 
 
 @not_user_creatable
@@ -142,7 +140,7 @@ class Action(CommonNode):
             default output pin.
         """
         for flow in [pin for pin in self._outputs if isinstance(pin, ActionFlow)]:
-            if flow.name == name:
+            if flow.pin_name == name:
                 flow.trigger()
 
 
@@ -154,7 +152,7 @@ class Print(Action):
         """Text to print."""
 
     def execute(self):
-        print(self.text)
+        click.secho(self.text)
         self.trigger_flow()
 
 
@@ -166,6 +164,9 @@ class Print(Action):
 #   - tem os mesmos outputs como os return values da func
 #       - se for output tuple[a,b], separa em outputs diferentes
 #   - no execute, a action pega os inputs e passa e executa a func, seta os returns como outputs e vai embora.
+#   - isso daria problema com save/load. Pro pickle funcionar, a classe precisa existir na raiz de algum módulo.
+#       - ai essas coisas que criam classes dinamicamente (dentro de uma função por exemplo) caga o pickle
+#       - pesquisar, talvez dê pra adaptar o save/load do pickle pra funcionar com classes dinamicas assim.
 # TODO: criar action que só tem um unico DataPin de output do tipo T. Nenhum flow. seria action de criar um valor estatico.
 #   - teria que criar uma derivada pra cada tipo (cada tipo no TypeDatabase que não seja Noop) parece bom
 #   - seria melhor se der pra gerar essas classes automaticamente num FOR or something.

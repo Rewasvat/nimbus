@@ -123,7 +123,7 @@ class AxisList(ContainerWidget):
                 slot_size = Vector2(self._area.x - self._margin*2, size)
             slot_size = slot_size.max((10, 10))
 
-            slot._name = f"#{i+1}"
+            slot.pin_name = f"#{i+1}"
             # NOTE: se somamos self.position, pra esse slot_pos ficar absoluto, caga tudo...
             #   Mas em tese todas slot positions deviam ser absolutas, não?
             slot.area.position = slot_pos + self.position

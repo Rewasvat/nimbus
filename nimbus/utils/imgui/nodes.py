@@ -3,6 +3,7 @@ from typing import Callable
 from nimbus.utils.imgui.general import menu_item
 from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.math import Vector2, Rectangle
+from nimbus.utils.idgen import IDManager
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
 
@@ -10,6 +11,7 @@ from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 # TODO: mudar cor de background do node content (mostly pra "nodes especiais")
 # TODO: permitir um sub-title abaixo do name do nome, no header.
 # TODO: linha separando header do content.
+# TODO: reciclar node/pin/link-ids caso o tal objeto seja deletado.
 class Node:
     """Utility class to represent a Node in imgui's Node Editor.
 
@@ -24,7 +26,7 @@ class Node:
     """
 
     def __init__(self):
-        self.node_id = imgui_node_editor.NodeId.create()
+        self.node_id = imgui_node_editor.NodeId(IDManager().get("GlobalNodeSystem").create())
         self.can_be_deleted = True
         """If this object can be deleted by user-interaction."""
         self.is_selected = False
@@ -289,7 +291,8 @@ class Node:
         self.walk_in_graph(move_node, allowed_outputs)
         self.editor.fit_to_window()
 
-
+AllIDTypes = imgui_node_editor.NodeId | imgui_node_editor.PinId | imgui_node_editor.LinkId
+"""Alias for all ID types in imgui-node-editor (NodeId, PinId and LinkId)"""
 PinKind = imgui_node_editor.PinKind
 """Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
 
@@ -303,9 +306,11 @@ class NodePin:
     Implementations should override the method ``draw_node_pin_contents()`` to draw the pin's contents.
     """
 
-    def __init__(self, parent: Node, kind: PinKind):
+    def __init__(self, parent: Node, kind: PinKind, name: str):
         self.parent_node: Node = parent
-        self.pin_id = imgui_node_editor.PinId.create()
+        # TODO: talvez tenhamos que atualizar a associacao do pin_name->id se pin name trocar
+        self.pin_name = name
+        self.pin_id = imgui_node_editor.PinId(IDManager().get("GlobalNodeSystem").create(f"node{parent.node_id.id()}_pin_{name}"))
         self.pin_kind = kind
         self._links: dict[NodePin, NodeLink] = {}
         """Dict of all links this pin have. Keys are the opposite pins, which along with us forms the link."""
@@ -325,7 +330,11 @@ class NodePin:
         """
         imgui_node_editor.begin_pin(self.pin_id, self.pin_kind)
         imgui.begin_horizontal(f"{repr(self)}NodePin")
+        if self.pin_kind == PinKind.output:
+            imgui.text_unformatted(self.pin_name)
         self.draw_node_pin_contents()
+        if self.pin_kind == PinKind.input:
+            imgui.text_unformatted(self.pin_name)
         imgui.end_horizontal()
         if self.pin_tooltip:
             imgui_node_editor.suspend()
@@ -523,7 +532,7 @@ class NodeLink:
     """
 
     def __init__(self, start_pin: NodePin, end_pin: NodePin, id: imgui_node_editor.LinkId = None, color: Color = None, thickness: float = None):
-        self.link_id = imgui_node_editor.LinkId.create() if id is None else id
+        self.link_id = imgui_node_editor.LinkId(IDManager().get("GlobalNodeSystem").create()) if id is None else id
         self.start_pin: NodePin = start_pin
         """The pin that starts this link. This should be a output pin."""
         self.end_pin: NodePin = end_pin
@@ -612,7 +621,7 @@ class NodeEditor:
         filter possible Nodes to allow creation.
         """
         self._create_new_node_to_pin: NodePin = None
-        """Pin from which a used pulled a new link to create a new link.
+        """Pin from which a user pulled a new link to create a new link.
 
         This is used by the Background Context Menu. If this is not-None, then the menu was opened by pulling
         a link to create a new node."""
@@ -642,32 +651,46 @@ class NodeEditor:
         if node in self.nodes:
             self.nodes.remove(node)
 
-    def find_node(self, id: imgui_node_editor.NodeId):
+    def _compare_ids(self, a_id: AllIDTypes, b_id: AllIDTypes | int):
+        """Compares a imgui-node-editor ID object to another to check if they match.
+
+        Args:
+            a_id (NodeId | PinId | LinkId): a ID object to check.
+            b_id (NodeId | PinId | LinkId | int): a ID object or INT value to check against.
+
+        Returns:
+            bool: if the IDs are the same.
+        """
+        if isinstance(b_id, int):
+            return a_id.id() == b_id
+        return a_id == b_id
+
+    def find_node(self, id: imgui_node_editor.NodeId | int):
         """Finds the node with the given NodeID amongst our nodes."""
         for node in self.nodes:
-            if node.node_id == id:
+            if self._compare_ids(node.node_id, id):
                 return node
 
-    def find_pin(self, id: imgui_node_editor.PinId):
+    def find_pin(self, id: imgui_node_editor.PinId | int):
         """Finds the pin with the given PinID amongst all pins from our nodes."""
         for node in self.nodes:
             for pin in node.get_input_pins():
-                if pin.pin_id == id:
+                if self._compare_ids(pin.pin_id, id):
                     return pin
             for pin in node.get_output_pins():
-                if pin.pin_id == id:
+                if self._compare_ids(pin.pin_id, id):
                     return pin
 
-    def find_link(self, id: imgui_node_editor.LinkId):
+    def find_link(self, id: imgui_node_editor.LinkId | int):
         """Finds the link with the given LinkID amongst all links, from all pins, from our nodes."""
         for node in self.nodes:
             for pin in node.get_input_pins():
                 for link in pin.get_all_links():
-                    if link.link_id == id:
+                    if self._compare_ids(link.link_id, id):
                         return link
             for pin in node.get_output_pins():
                 for link in pin.get_all_links():
-                    if link.link_id == id:
+                    if self._compare_ids(link.link_id, id):
                         return link
 
     def render_system(self, nodes: list[Node] = None):

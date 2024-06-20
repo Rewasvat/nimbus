@@ -55,11 +55,10 @@ class WidgetParentPin(NodePin):
     """Node Pin for a widget's parent container."""
 
     def __init__(self, parent: 'BaseWidget'):
-        super().__init__(parent, PinKind.input)
+        super().__init__(parent, PinKind.input, "Parent")
 
     def draw_node_pin_contents(self):
         draw_widget_pin_icon(self.is_linked_to_any())
-        imgui.text_unformatted("Parent")
 
     def __str__(self):
         return f"{self.parent_node} Parent Slot"
@@ -74,13 +73,9 @@ class BaseWidget(CommonNode):
 
     NOTE: this class automatically sets up ``__init__()`` in sub-classes to call the initializer of this class before.
     """
-    _widget_instance_count = 0
-    """Internal instance counter used for unique IDs."""
 
     def __init__(self):
         super().__init__()
-        BaseWidget._widget_instance_count += 1
-        self._internal_id = f"{type(self).__name__}-{BaseWidget._widget_instance_count}"
         self._name: str = str(hash(self))
         self.slot: Slot = None
         """Parent slot containing this widget. Might be None."""
@@ -105,7 +100,7 @@ class BaseWidget(CommonNode):
     @property
     def id(self):
         """Fixed ID of this widget. IDs are uniquely generated at creation, according to widget type and overall instance count."""
-        return self._internal_id
+        return f"{type(self).__name__}-{self.node_id.id()}"
 
     @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
@@ -197,8 +192,8 @@ class BaseWidget(CommonNode):
 
         Subclasses should not override this.
         """
-        if self.slot is not None and self.slot.parent is not None:
-            self.slot.parent.render_full_edit()
+        if self.slot is not None and self.slot.parent_node is not None:
+            self.slot.parent_node.render_full_edit()
         if not self.editable:
             return
         imgui.text(self.name)
@@ -333,10 +328,9 @@ class Slot(NodePin):
     for that container."""
 
     def __init__(self, parent: 'ContainerWidget', name: str):
-        super().__init__(parent, PinKind.output)
-        self.parent: 'ContainerWidget' = parent  # will be the same as self.parent_node, but proper type-hint.
+        super().__init__(parent, PinKind.output, name if name else f"#{parent.slot_counter}")
+        self.parent_node: 'ContainerWidget' = parent  # fixing to proper type-hint.
         self._child: BaseWidget = None
-        self._name: str = name if name else f"#{parent.slot_counter}"
         self.area = Rectangle((0, 0), (1, 1))
         """The area of this slot. It's inside this area, as a imgui ChildRegion, that our child widget will be drawn.
 
@@ -383,14 +377,14 @@ class Slot(NodePin):
     @child.setter
     def child(self, value: BaseWidget):
         if (value is not None) and not self.accepts_widget(value):
-            click.secho(f"{self.parent}'s {self} can't accept widget '{value}' (a {type(value)}) as child.", fg="red")
+            click.secho(f"{self.parent_node}'s {self} can't accept widget '{value}' (a {type(value)}) as child.", fg="red")
             return
         if self._child is not None:
             self._child.reparent_to()
         self._child = value
         if value is not None:
-            if self.parent.system:
-                self.parent.system.register_widget(value)
+            if self.parent_node.system:
+                self.parent_node.system.register_widget(value)
             value.reparent_to(self)
 
     def render(self):
@@ -410,14 +404,14 @@ class Slot(NodePin):
 
         imgui.set_cursor_screen_pos(self.area.position)
         window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
-        id = f"{self.parent}Slot{self._name}"
+        id = f"{self.parent_node}Slot{self.pin_name}"
         imgui.begin_child(id, self.area.size, window_flags=window_flags)
         imgui.push_id(id)
         if self.child:
             self.child._set_pos_and_size()
             if self.child.enabled:
                 self.child.render()
-        elif self.parent.system and self.parent.system.edit_enabled:
+        elif self.parent_node.system and self.parent_node.system.edit_enabled:
             self.draw_open_slot_menu()
         imgui.pop_id()
         imgui.end_child()
@@ -446,11 +440,11 @@ class Slot(NodePin):
         imgui.invisible_button(f"{self}OpenSlotMenu", self.area.size)
         if not imgui.begin_popup_context_item("CreateNewWidgetMenu"):
             return
-        self.parent.render_full_edit()
+        self.parent_node.render_full_edit()
         imgui.separator()
         imgui.text(f"{self} - create new widget:")
-        if self.parent.system:
-            new_child = self.parent.system.render_create_widget_menu(self.accepted_child_types)
+        if self.parent_node.system:
+            new_child = self.parent_node.system.render_create_widget_menu(self.accepted_child_types)
         else:
             new_child = None
             imgui.text_colored(Colors.red, "Widget has no root system!")
@@ -464,8 +458,8 @@ class Slot(NodePin):
         Besides clearing and removing this slot from its parent container, this will also remove our attached child widget (if any)."""
         if self._child:
             self._child.reparent_to()
-        self.parent._slots.remove(self)
-        self.parent.on_slots_changed()
+        self.parent_node._slots.remove(self)
+        self.parent_node.on_slots_changed()
 
     def accepts_widget(self, widget: BaseWidget):
         """Checks if the given widget is accepted by this slot as a child.
@@ -482,7 +476,6 @@ class Slot(NodePin):
         return False
 
     def draw_node_pin_contents(self):
-        imgui.text(self._name)
         draw_widget_pin_icon(self.is_linked_to_any())
 
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
@@ -491,7 +484,7 @@ class Slot(NodePin):
             return ok, why_not
         widget = pin.parent_node  # remember, nodes are widgets
         if not self.accepts_widget(widget):
-            return False, f"{self.parent}'s {self} can't accept widget '{widget}' (a {type(widget)}) as child."
+            return False, f"{self.parent_node}'s {self} can't accept widget '{widget}' (a {type(widget)}) as child."
         if self.child == widget:
             return False, "Already linked to that widget."
         return True, "success"
@@ -507,7 +500,7 @@ class Slot(NodePin):
         self.child = None
 
     def __str__(self):
-        return f"Slot {self._name}"
+        return f"Slot {self.pin_name}"
 
 
 # TODO: render-edit: permitir drag&drop pra mudar ordem dos slots, arrastando eles no menu.
@@ -566,7 +559,7 @@ class ContainerWidget(BaseWidget):
             Slot: the with the given name, or None.
         """
         for slot in self._slots:
-            if slot._name == name:
+            if slot.pin_name == name:
                 return slot
 
     def update_slots(self):
@@ -610,9 +603,9 @@ class ContainerWidget(BaseWidget):
         for slot in self.slots:
             imgui.push_style_color(imgui.Col_.header, self._edit_slot_header_color)
             if slot.can_be_deleted:
-                opened, exists = imgui.collapsing_header(f"Slot: {slot._name}", p_visible=True)
+                opened, exists = imgui.collapsing_header(f"Slot: {slot.pin_name}", p_visible=True)
             else:
-                opened = imgui.collapsing_header(f"Slot: {slot._name}")
+                opened = imgui.collapsing_header(f"Slot: {slot.pin_name}")
                 exists = True
             imgui.pop_style_color()
             imgui.set_item_tooltip(type(slot).__doc__)

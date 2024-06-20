@@ -25,9 +25,13 @@ class DataPin(NodePin):
     """
 
     def __init__(self, parent: Node, kind: PinKind, name: str, value_type: type, initial_value=None):
-        super().__init__(parent, kind)
-        self.name = name
+        super().__init__(parent, kind, name)
         self.value = initial_value
+        """Value set in this pin. This is the user-configurable value (in the node editor), which is usually the default value of the pin.
+
+        The proper actual value of the pin may change due to links with other data-pins, in which case this value isn't used. To get the actual
+        value, see ``self.get_value()``.
+        """
         self.value_type = value_type
         self._pin_tooltip: str = None
         self._editor: types.TypeEditor = None
@@ -51,8 +55,6 @@ class DataPin(NodePin):
         self._pin_tooltip = value
 
     def draw_node_pin_contents(self):
-        if self.pin_kind == PinKind.output:
-            imgui.text_unformatted(self.name)
         draw = imgui.get_window_draw_list()
         size = imgui.get_text_line_height()
         center = Vector2.from_cursor_screen_pos() + (size * 0.5, size * 0.5)
@@ -64,8 +66,6 @@ class DataPin(NodePin):
             thickness = 2
             draw.add_circle(center, radius, color, thickness=thickness)
         imgui.dummy((size, size))
-        if self.pin_kind == PinKind.input:
-            imgui.text_unformatted(self.name)
 
     @property
     def accepts_any_as_input(self) -> bool:
@@ -154,7 +154,7 @@ class DataPin(NodePin):
         # Let output pins have their value edited/set as well. That will enable setting a output pin's default value.
         # And also allow nodes without flow connections that only output static values!
         if self._editor:
-            self._editor.update_from_obj(self.parent_node, self.name)
+            self._editor.update_from_obj(self.parent_node, self.pin_name)
             changed, new_value = self._editor.render_value_editor(self.value)
             if changed:
                 self.set_value(new_value)
@@ -169,7 +169,7 @@ class DataPin(NodePin):
                     self.remove_link_to(pin)
 
     def __str__(self):
-        return f"{self.pin_kind.name.capitalize()} Data {self.name}"
+        return f"{self.pin_kind.name.capitalize()} Data {self.pin_name}"
 
 
 class NodeDataProperty(types.ImguiProperty):
@@ -345,7 +345,7 @@ class CommonNode(Node):
             DataPin: The DataPin with the given name, or None if no pin exists.
         """
         for data in [pin for pin in self._inputs if isinstance(pin, DataPin)]:
-            if data.name == name:
+            if data.pin_name == name:
                 return data
 
     def get_output_data_pin(self, name: str):
@@ -358,7 +358,7 @@ class CommonNode(Node):
             DataPin: The DataPin with the given name, or None if no pin exists.
         """
         for data in [pin for pin in self._outputs if isinstance(pin, DataPin)]:
-            if data.name == name:
+            if data.pin_name == name:
                 return data
 
     def delete(self):
@@ -378,7 +378,7 @@ class CommonNode(Node):
         for pin in self._inputs:
             if not isinstance(pin, DataPin):
                 continue
-            imgui.text(pin.name)
+            imgui.text(pin.pin_name)
             imgui.set_item_tooltip(pin.pin_tooltip)
             imgui.same_line()
             pin.render_edit_details()

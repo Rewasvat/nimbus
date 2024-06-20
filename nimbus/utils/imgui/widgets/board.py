@@ -16,12 +16,12 @@ class BoardSlot(Slot):
     @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
         """Name of this slot. User can change this, but it should be unique amongst all slots of this container. [GET/SET]"""
-        return self._name
+        return self.pin_name
 
     @name.setter
     def name(self, value):
-        was_selected = self.parent.selected_name == self._name
-        self._name = value
+        was_selected = self.parent.selected_name == self.pin_name
+        self.pin_name = value
         if was_selected:
             self.parent.selected_name = value
 
@@ -63,7 +63,7 @@ class Board(ContainerWidget):
     @selected_name.setter
     def selected_name(self, value: str):
         for slot in self._slots:
-            slot.enabled = slot._name == value
+            slot.enabled = slot.pin_name == value
         self._selected_name = value
 
     def on_slots_changed(self):
