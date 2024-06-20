@@ -15,26 +15,7 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
     """MONITOR COMMANDS"""
 
     def __init__(self):
-        self._computer: sensors.System = None
-        """Main System instance for querying hardware and sensor data. Use only after initializing this manager!"""
-        cache = DataCache()
-        cache.add_shutdown_listener(self.on_shutdown)
-
-    @property
-    def computer(self) -> sensors.System:
-        """Main System instance for querying hardware and sensor data.
-
-        If this Monitor wasn't initialized yet, this will call ``self.initialize()`` to do so in order
-        to create the System instance returned by this property. See ``initialize`` for more info.
-        """
-        if not self._computer:
-            self.initialize()
-        return self._computer
-
-    @property
-    def is_initialized(self):
-        """Checks if this MonitorManager is initialized."""
-        return self._computer is not None
+        pass
 
     @cmd_utils.object_identifier
     def name(self):
@@ -49,38 +30,12 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
         monitor = MonitorApp()
         monitor.run()
 
-    def initialize(self, dummy=False):
-        """Initializes this manager.
-
-        This creates our internal System instance (see ``self.computer``). This is an operation that can take a while to finish,
-        so if you're going to use the Sensor System, its best to call this initialize beforehand when loading.
-
-        Args:
-            dummy (bool, optional): If true, will use a dummy internal Computer object, with dummy sensors that simulate actual
-            sensors with changing values, for testing sensor-related code without needing to load sensors properly. Defaults to False.
-        """
-        self._computer = sensors.System()
-        self._computer.open(dummy_test=dummy)
-
-    def on_shutdown(self):
-        """Callback for when Nimbus is shutdown."""
-        if self.computer is not None:
-            self.computer.close()
-
-    @cmd_utils.instance_command()
-    def teste(self):
-        self.initialize()
-        self.computer.update()
-
-        for sensor in self.computer.get_all_sensors():
-            print(sensor.format("{id} ({unit}) = {limits}"))
-
     @cmd_utils.instance_command()
     @click.option("--test", "-t", is_flag=True, help="Use dummy testing sensors")
     def widgets(self, test):
         """Opens a debug GUI for testing the Widget System."""
         if test:
-            self.initialize(True)
+            sensors.ComputerSystem().open(True)
         app = WidgetsTestApp()
         app.run()
 
@@ -97,16 +52,12 @@ class MonitorAppData:
         cache = DataCache()
         data = cache.get_data("monitor_data")
         if data is not None:
-            for key, value in vars(data).items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
+            self.__dict__.update(vars(data))
 
-        monitor = MonitorManager()
-        monitor.computer.setup_user_sensor_settings(self.user_sensor_settings)
+        sensors.ComputerSystem().setup_user_sensor_settings(self.user_sensor_settings)
 
     def save(self):
-        monitor = MonitorManager()
-        self.user_sensor_settings = monitor.computer.check_user_sensor_settings()
+        self.user_sensor_settings = sensors.ComputerSystem().check_user_sensor_settings()
 
         cache = DataCache()
         cache.set_data("monitor_data", self)
@@ -130,12 +81,12 @@ class MonitorApp(windows.AppWindow):
 
     def __init__(self):
         super().__init__("System Monitor", windows.RunnableAppMode.SIMPLE)
-        self.monitor = MonitorManager()
+        self.computer = sensors.ComputerSystem()
         self.data: MonitorAppData = MonitorAppData()
         self.elapsed_time: float = 0
 
     def on_init(self):
-        self.monitor.initialize()
+        self.computer.open()
         self.data.load()
 
     def on_before_exit(self):
@@ -145,7 +96,7 @@ class MonitorApp(windows.AppWindow):
     def update(self):
         io = imgui.get_io()
         # TODO: precisa setar o update_time do computer.
-        self.monitor.computer.timed_update(io.delta_time)
+        self.computer.timed_update(io.delta_time)
 
     def render(self):
         self.update()
@@ -163,7 +114,7 @@ class MonitorApp(windows.AppWindow):
 
             imgui.table_headers_row()
 
-            for sensor in self.monitor.computer.get_all_sensors():
+            for sensor in self.computer.get_all_sensors():
                 if not sensor.enabled:
                     continue
 
@@ -214,7 +165,7 @@ class MonitorApp(windows.AppWindow):
 
     def render_top_menu(self):
         if imgui.begin_menu("Sensors"):
-            for hardware in self.monitor.computer:
+            for hardware in self.computer:
                 if not imgui.begin_menu(hardware.name):
                     continue
                 imgui.push_id(f"hw_menu_{hardware.id}")
