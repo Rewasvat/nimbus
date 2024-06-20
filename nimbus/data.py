@@ -52,6 +52,9 @@ class DataCache(metaclass=Singleton):
     def __init__(self):
         self._cache_data: dict[str, any] = None
         """Dict of data of the main cache. This is persisted via pickle to the common nimbus-datacache file."""
+        self._custom_data: dict[str, any] = {}
+        """Dict of custom data to persist. Each item will be persisted via pickle to a separate cache file, with name
+        based on the item's key."""
         self.service_id = "NimbusTool"
         self.shutdown_listeners: list[Callable[[], None]] = []
         self.data_path = ""  # Initialized in 'set_cache_path'
@@ -67,6 +70,12 @@ class DataCache(metaclass=Singleton):
     def delete(self):
         """Deletes the data files saved by this DataCache instance in its cache-path.
         NOTE: this will DELETE our data cache, effectively erasing all configuration and stored data used by commands. USE AT OWN RISK."""
+        custom_data_keys: set[str] = self.get_data("custom_data_keys", set())
+        for custom_key in custom_data_keys:
+            custom_cache_path = self._get_custom_cache_path(custom_key)
+            if os.path.isfile(custom_cache_path):
+                os.remove(custom_cache_path)
+
         if os.path.isfile(self.data_path):
             os.remove(self.data_path)
 
@@ -110,6 +119,62 @@ class DataCache(metaclass=Singleton):
         """Saves this data cache to disk."""
         if self._cache_data is not None:
             safe_pickle_save(self.data_path, self._cache_data)
+
+    def get_custom_cache(self, key: str, default=None):
+        """Gets the custom cache data for the given key.
+
+        Custom caches are data saved to disk in cache files (pickled files) different than our main cache data and each other.
+        In essence, each custom cache is saved (pickled) to its own file.
+
+        The first time this is called for a custom cache, it'll be loaded from disk (and thus, its objects will be recreated by pickle).
+        Afterwards, the DataCache keeps a local ref of the data, so subsequent calls to this will return the stored object without re-loading
+        from disk. ``save_custom_cache()`` changes this stored object while also saving it to disk.
+
+        Args:
+            key (str): Key identifying the custom cache.
+            default (any, optional): Default object to return in case we don't have the data already loaded and the custom cache doesn't exist
+            for loading. Defaults to None.
+
+        Returns:
+            any: the object loaded from the custom cache.
+        """
+        custom_data_keys: set[str] = self.get_data("custom_data_keys", set())
+        data = self._custom_data.get(key)
+        if data is None and key in custom_data_keys:
+            with open(self._get_custom_cache_path(key), 'rb') as file_obj:
+                data = pickle.load(file_obj)
+            self._custom_data[key] = data
+        return data or default
+
+    def save_custom_cache(self, key: str, value):
+        """Saves the given data in a custom data cache.
+
+        The data is pickled and saves in its own file, separated from our main cache and the other custom caches.
+
+        Args:
+            key (str): Key identifying the custom cache. Generated file will have this name, so prefer small keys without spaces or punctuation.
+            value (any): Data to be saved. Must be pickable.
+        """
+        custom_data_keys: set[str] = self.get_data("custom_data_keys", set())
+        if value is None:
+            self._custom_data.pop(key)
+            custom_data_keys.remove(key)
+        else:
+            self._custom_data[key] = value
+            if safe_pickle_save(self._get_custom_cache_path(key), value):
+                custom_data_keys.add(key)
+        self.set_data("custom_data_keys", custom_data_keys)
+
+    def _get_custom_cache_path(self, key: str):
+        """Gets the path for the custom cache file for the given key.
+
+        Args:
+            key (str): key of the custom cache data.
+
+        Returns:
+            str: path to the file.
+        """
+        return os.path.join(self.base_path, f"nimbus_customcache_{key}")
 
     def set_password(self, key, password):
         """Saves a value ("password") in the system's encrypted keyring service.
