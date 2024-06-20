@@ -171,6 +171,28 @@ class DataPin(NodePin):
     def __str__(self):
         return f"{self.pin_kind.name.capitalize()} Data {self.pin_name}"
 
+    def __getstate__(self):
+        state = super().__getstate__()
+        if self._property and self._property.use_prop_value:
+            # No need to save our value if we directly use the value from the property.
+            state["value"] = None
+        state["_property"] = self._property is not None
+        if isinstance(self._editor, types.NoopEditor):
+            # TODO: how to properly persist noop editor objects? They fail to pickle because the decorator creates local classes.
+            state["_editor"] = None
+        # Property will be updated on self._update_state_after_recreation()
+        # We can't update it normally on self.__setstate__(state) since on that point, we would have no parent node.
+        return state
+
+    def _update_state_after_recreation(self, parent: Node):
+        super()._update_state_after_recreation(parent)
+        if self._property is True:
+            props: dict[str, NodeDataProperty] = get_all_properties(type(parent), NodeDataProperty)
+            self._property = props[self.pin_name]
+            self._property.data_pins[parent] = self
+        if self._editor and self._property:
+            self._property.editors[parent] = self._editor
+
 
 class NodeDataProperty(types.ImguiProperty):
     """Advanced python Property that associates a DataPin with the property.
@@ -204,6 +226,14 @@ class NodeDataProperty(types.ImguiProperty):
         Instead of getting/setting from the DataPin, which is the default behavior so that common data-properties don't need to
         implement proper getters/setters."""
         return self.metadata.get("use_prop_value", False)
+
+    @property
+    def data_pins(self) -> dict[Node, DataPin]:
+        """Internal mapping of Nodes to the DataPins that this property has created.
+        The nodes are the instances of the class that owns this property."""
+        pins = getattr(self, "_data_pins", {})
+        self._data_pins = pins
+        return pins
 
     def __get__(self, obj: Node, owner: type | None = None):
         ret = self.get_prop_value(obj, owner)
@@ -243,10 +273,7 @@ class NodeDataProperty(types.ImguiProperty):
         If it doesn't exist, it'll be created. But the pin is not added to the node, the Node should do
         that (see ``create_data_pins_from_properties``).
         """
-        pins = getattr(self, "_data_pins", {})
-        self._data_pins = pins
-
-        pin: DataPin = pins.get(obj)
+        pin: DataPin = self.data_pins.get(obj)
         if pin is None:
             value_type = self.get_value_type(obj)
             initial_value = super().__get__(obj, type(obj))
@@ -254,7 +281,7 @@ class NodeDataProperty(types.ImguiProperty):
             pin.pin_tooltip = self.__doc__
             pin._property = self
             pin.setup_editor(editor=self.get_editor(obj))
-            pins[obj] = pin
+            self.data_pins[obj] = pin
         return pin
 
 

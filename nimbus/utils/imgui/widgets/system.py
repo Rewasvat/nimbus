@@ -84,6 +84,10 @@ class SystemRootNode(CommonNode):
         if menu_item("Reposition Nodes"):
             self.reposition_nodes([actions.ActionFlow, Slot, SystemRootPin])
         imgui.set_item_tooltip("Rearranges all nodes following this one according to depth in the graph.")
+        if menu_item("Save"):
+            self.system.save_to_cache()
+        imgui.set_item_tooltip("Saves the System to disk. System saves automatically when closing.")
+
 
 # TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
 # TODO: opcao pra abrir edit em cima do render-widgets, tipo um overlay (nao abre outra janela, mostra widgets)
@@ -161,13 +165,28 @@ class WidgetSystem:
         """Renders the contents of the system edit window."""
         self.node_editor.render_system()
 
-    def load(self):
-        # TODO: load nodes from cache
-        pass
+    @classmethod
+    def load_from_cache(cls, name: str) -> 'WidgetSystem':
+        """Loads a WidgetSystem object from the DataCache.
 
-    def save(self):
-        # TODO: save nodes from cache
-        pass
+        If the system doesn't exist, its instance will be created.
+
+        Args:
+            name (str): name of WidgetSystem to load/create.
+
+        Returns:
+            WidgetSystem: the loaded (or created) WidgetSystem instance.
+        """
+        cache = DataCache()
+        system: WidgetSystem = cache.get_custom_cache(f"WidgetSystem_{name}")
+        if system is None:
+            system = cls(name)
+        return system
+
+    def save_to_cache(self):
+        """Saves this WidgetSystem instance to the DataCache, thus persisting its data for future use. Cache key is based on our name."""
+        cache = DataCache()
+        cache.save_custom_cache(f"WidgetSystem_{self.name}", self)
 
     def register_widget(self, widget: BaseWidget):
         """Registers the given widget with this system.

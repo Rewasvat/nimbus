@@ -291,6 +291,28 @@ class Node:
         self.walk_in_graph(move_node, allowed_outputs)
         self.editor.fit_to_window()
 
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        state = vars(self).copy()
+        state["node_id"] = self.node_id.id()
+        state["editor"] = None  # NodeEditor handles re-setting our editor attribute
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        self.__dict__.update(state)
+        self.node_id = imgui_node_editor.NodeId(state["node_id"])
+        for pin in self.get_input_pins() + self.get_output_pins():
+            pin._update_state_after_recreation(self)
+
+
 AllIDTypes = imgui_node_editor.NodeId | imgui_node_editor.PinId | imgui_node_editor.LinkId
 """Alias for all ID types in imgui-node-editor (NodeId, PinId and LinkId)"""
 PinKind = imgui_node_editor.PinKind
@@ -520,6 +542,37 @@ class NodePin:
         """
         pass
 
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        state = vars(self).copy()
+        state["pin_id"] = self.pin_id.id()
+        state["parent_node"] = None  # Node re-creating us should handle setting parent_node.
+        state["_links"] = {}  # NodeEditor handles re-creating all links, since each link needs at least 2 nodes/pins to be already recreated.
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        self.__dict__.update(state)
+        self.pin_id = imgui_node_editor.PinId(state["pin_id"])
+
+    def _update_state_after_recreation(self, parent: Node):
+        """Internal method to update state of this Pin instance after recreation (unpickling).
+        This is called by the parent node to update its pins' state after it (the node) is ready.
+
+        NOTE: not to be called outside ``Node.__setstate__`` chains.
+
+        Args:
+            parent (Node): parent node that is recreating this pin.
+        """
+        self.parent_node = parent
+
 
 class NodeLink:
     """The connection between an input and output pins on two different nodes.
@@ -577,6 +630,27 @@ class NodeLink:
     def __str__(self):
         return f"({self.start_pin})== link to =>({self.end_pin})"
 
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        state = vars(self).copy()
+        state["link_id"] = self.link_id.id()
+        state["start_pin"] = self.start_pin.pin_id.id()
+        state["end_pin"] = self.end_pin.pin_id.id()
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        self.__dict__.update(state)
+        # NodeEditor handles recreating all links, after all nodes/pins are recreated.
+        self.link_id = imgui_node_editor.LinkId(state["link_id"])
+
 
 def get_all_links_from_nodes(nodes: list[Node]):
     """Gets a list of all links from all pins of the given nodes.
@@ -593,9 +667,6 @@ def get_all_links_from_nodes(nodes: list[Node]):
 
 
 # TODO: copy/paste/cut
-# TODO: colocar dados salvos do imgui-node-editor no nosso DataCache
-#   - atualmente, ele salva num json default na pasta onde executou o app (ver `Widgets_Test` no ~)
-#   - investigar q tem um Widgets_Test.ini lá tb
 # TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
 class NodeEditor:
     """Represents a Node Editor system.
@@ -1009,3 +1080,34 @@ class NodeEditor:
         """Changes the editor's viewport position and zoom in order to make all content in the editor
         fit in the window (the editor's area)."""
         imgui_node_editor.navigate_to_content()
+
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        state = vars(self).copy()
+        state["_create_new_node_to_pin"] = None
+        state["_selected_menu_node"] = None
+        state["_selected_menu_pin"] = None
+        state["_selected_menu_link"] = None
+        state["__picklestate_all_links"] = get_all_links_from_nodes(self.nodes)
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        links: list[NodeLink] = state.pop("__picklestate_all_links")
+        self.__dict__.update(state)
+        for node in self.nodes:
+            node.editor = self
+        for link in links:
+            # Update link with its pins
+            link.start_pin = self.find_pin(link.start_pin)
+            link.end_pin = self.find_pin(link.end_pin)
+            # Update pins with the link
+            link.start_pin._links[link.end_pin] = link
+            link.end_pin._links[link.start_pin] = link

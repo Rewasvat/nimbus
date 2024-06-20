@@ -804,3 +804,14 @@ class Sensor(CommonNode):
         self._isensor = ComputerSystem().get_isensor_by_id(id)
         if self._isensor:
             self._isensor._sensor = self
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state["__picklestate_sensor_id"] = self.id
+        state["_isensor"] = None
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        sensor_id = state.pop("__picklestate_sensor_id")
+        super().__setstate__(state)
+        self._set_id(sensor_id)

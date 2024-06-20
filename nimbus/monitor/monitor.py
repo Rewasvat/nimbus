@@ -300,3 +300,9 @@ class WidgetsTestApp(windows.AppWindow):
 
     def on_init(self):
         sensors.ComputerSystem().open()
+        from nimbus.utils.imgui.widgets import WidgetSystem
+        self.system = WidgetSystem.load_from_cache("Test")
+
+    def on_before_exit(self):
+        self.system.save_to_cache()
+        super().on_before_exit()

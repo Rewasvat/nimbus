@@ -94,6 +94,14 @@ class ImguiProperty(AdvProperty):
     is based on this property's metadata.
     """
 
+    @property
+    def editors(self) -> dict[object, 'TypeEditor']:
+        """Internal mapping of objects to the TypeEditors that this property has created.
+        The objects are the instances of the class that owns this property."""
+        objects = getattr(self, "_editors", {})
+        self._editors = objects
+        return objects
+
     def get_value_type(self, obj=None):
         """Gets the type of this property (the type of its value).
 
@@ -148,10 +156,7 @@ class ImguiProperty(AdvProperty):
             exist and couldn't be created (which usually means the property's value type is undefined, or no Editor class is
             registered for it).
         """
-        editors = getattr(self, "_editors", {})
-        self._editors = editors
-
-        editor: TypeEditor = editors.get(obj, None)
+        editor: TypeEditor = self.editors.get(obj, None)
         editor_cls = self.get_value_editor(obj)
         if editor is None and editor_cls is not None:
             data = self.metadata.copy()
@@ -159,7 +164,7 @@ class ImguiProperty(AdvProperty):
                 data["doc"] = self.__doc__
             data["value_type"] = self.get_value_type(obj)
             editor = editor_cls(data)
-            editors[obj] = editor
+            self.editors[obj] = editor
         return editor
 
     def render_editor(self, obj):

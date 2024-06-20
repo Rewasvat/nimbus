@@ -323,6 +323,12 @@ class Panel(ContainerWidget):
         for slot in self._fixed_slots:
             slot.child.system = self.system
 
+    def __setstate__(self, state: dict[str]):
+        super().__setstate__(state)
+        for pin in self._fixed_slots:
+            # These slots are not returned by get_output_slots(), so manually update them here.
+            pin._update_state_after_recreation(self)
+
     # Dynamic Editor Updaters
     def _update_border_width_ratio_editor(self, editor: types.FloatEditor):
         """Method automatically called by our ``border_width_ratio`` float-property editor in order to dynamically
