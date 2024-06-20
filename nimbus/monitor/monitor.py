@@ -275,6 +275,11 @@ class MonitorApp(windows.AppWindow):
         imgui.end_popup()
 
 
+# TODO: ter uma lista de WidgetSystem existente, e ai:
+#   - permitir user escolher qual system vai ver/editar
+#   - permitir user criar/deletar system
+#   - deixar só um system carregado por vez. (vai precisar de algum delete()/clear() no WidgetSystem pra deletar todos seus nodes,
+#     pros Sensores limpares os InternalSensor...)
 class WidgetsTestApp(windows.AppWindow):
     """TODO teste pro sistema de Widgets, talvez deletar depois?"""
 
@@ -285,66 +290,13 @@ class WidgetsTestApp(windows.AppWindow):
         self.show_status_bar = False
         self.enable_viewports = True
         from nimbus.utils.imgui.widgets import WidgetSystem
-        self.root = WidgetSystem("Test")
+        self.system: WidgetSystem = None
         self.elapsed = 0.0
-        self.create_contents()
-
-    def create_contents(self):
-        from nimbus.utils.imgui.widgets import Board, AxisList, Rect, Label, Corner, Panel, ProgressBar
-        pnl = Panel()
-        self.root.register_widget(pnl)
-
-        brd = Board(["Default", "Other"])
-        pnl.content.child = brd
-
-        other = Rect(Colors.magenta)
-        other.is_top_rounded = other.is_bottom_rounded = other.is_left_rounded = other.is_right_rounded = True
-        other.name = "OtherStuff"
-        brd.get_slot("Other").child = other
-
-        list1 = AxisList([1, 1])
-        list1.is_horizontal = True
-        list1.name = "HoriList"
-        brd.get_slot("Default").child = list1
-        brd.selected_name = "Default"
-
-        # r1 = Rect(Colors.red)
-        # r1.is_bottom_rounded = True
-        # r2 = Rect(Colors.green)
-        # r2.is_top_rounded = True
-        r3 = Rect(Colors.blue)
-        r3.name = "BlueRect"
-        r3.is_left_rounded = True
-        r4 = Rect(Colors.yellow)
-        r4.name = "YellowRect"
-        r4.is_right_rounded = True
-
-        col1 = AxisList([1, 1])
-        col1.name = "Column1"
-        list1.slots[0].child = col1
-        # col1.margin = 15
-        col1.slots[0].child = ProgressBar()
-        c = Corner()
-        c.name = "Fukthis"
-        col1.slots[1].child = c
-
-        col2 = AxisList([1, 1])
-        col2.name = "Column2"
-        list1.slots[1].child = col2
-        col2.slots[0].child = r3
-        col2.slots[1].child = r4
 
     def render(self):
         if imgui.is_key_pressed(imgui.Key.escape):
-            from imgui_bundle import hello_imgui  # type: ignore
-            run_params = hello_imgui.get_runner_params()
-            run_params.app_shall_exit = True
+            self.close()
+        self.system.render()
 
-        # io = imgui.get_io()
-        # self.elapsed += io.delta_time
-        # if self.elapsed >= 1.0:
-        #     num = len(self.root.names)
-        #     index = self.root.names.index(self.root.selected_name)
-        #     next_index = (index + 1) % num
-        #     self.root.selected_name = self.root.names[next_index]
-        self.root.render()
+    def on_init(self):
+        sensors.ComputerSystem().open()

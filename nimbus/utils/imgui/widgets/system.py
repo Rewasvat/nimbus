@@ -1,20 +1,20 @@
 import nimbus.utils.imgui.actions as actions
 from imgui_bundle import imgui
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
-from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind
+from nimbus.utils.imgui.nodes import NodePin, NodeLink, NodeEditor, PinKind
+from nimbus.utils.imgui.nodes_common import CommonNode
 from nimbus.utils.imgui.colors import Colors
-from nimbus.monitor.sensors import Sensor, Hardware
-from nimbus.monitor.monitor import MonitorManager
-
 from nimbus.utils.imgui.widgets.base import BaseWidget, Slot, WidgetParentPin, draw_widget_pin_icon
+from nimbus.monitor.sensors import Sensor, Hardware, ComputerSystem
+from nimbus.data import DataCache
 
 
 class SystemRootPin(NodePin):
-    """Node Pin for a WidgetSystem's Root widget."""
+    """Widget Root Pin for a WidgetSystem's Root node."""
 
-    def __init__(self, parent: 'WidgetSystem'):
-        super().__init__(parent, PinKind.output)
-        self.parent_node: WidgetSystem = parent
+    def __init__(self, parent: 'SystemRootNode'):
+        super().__init__(parent, PinKind.output, "Root")
+        self.parent_node: SystemRootNode = parent
         self._child: BaseWidget = None
         self.default_link_color = Colors.green  # same color used in draw_widget_pin_icon
 
@@ -36,7 +36,6 @@ class SystemRootPin(NodePin):
                 self.link_to(value.parent_pin)
 
     def draw_node_pin_contents(self):
-        imgui.text("Root")
         draw_widget_pin_icon(self.is_linked_to_any())
 
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
@@ -55,37 +54,80 @@ class SystemRootPin(NodePin):
         self.child = None
 
 
+class SystemRootNode(CommonNode):
+    """Root Node for a WidgetSystem.
+
+    Provides base output pins from which the system may be defined:
+    * A root widget pin to create the widget hierarchy.
+    * System level ActionFlows for logic triggering.
+    * System level DataPins providing basic system data for the graph.
+    """
+
+    def __init__(self, system: 'WidgetSystem'):
+        super().__init__()
+        self.system: WidgetSystem = system
+        self.widget_root = SystemRootPin(self)
+        self.on_update = actions.ActionFlow(self, PinKind.output, "On Update")
+        self._outputs.append(self.widget_root)
+        self._outputs.append(self.on_update)
+        self.node_title = str(system)
+        self.can_be_deleted = False
+        self.create_data_pins_from_properties()
+
+    @actions.output_property(use_prop_value=True)
+    def delta_time(self) -> float:
+        """Gets the delta time, in seconds, between the current and last frames from IMGUI."""
+        io = imgui.get_io()
+        return io.delta_time
+
+    def render_edit_details(self):
+        if menu_item("Reposition Nodes"):
+            self.reposition_nodes([actions.ActionFlow, Slot, SystemRootPin])
+        imgui.set_item_tooltip("Rearranges all nodes following this one according to depth in the graph.")
+
 # TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
 # TODO: opcao pra abrir edit em cima do render-widgets, tipo um overlay (nao abre outra janela, mostra widgets)
 # TODO: mudar nome disso? afinal agora junta widgets+actions+sensors
 # TODO: talvez de pra separar o "WidgetSystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
 #       e finalmente uma com widget+actions+sensores
-class WidgetSystem(Node):
-    """Root object managing a Widget and Action hierarchy."""
+class WidgetSystem:
+    """Represents a complete user-configurable UI and logic system.
+
+    * Contains a Widget hierarchy for configuring the UI. The widgets are fully-configurable by the user.
+    * Supports Actions for defining logic that can be executed on events.
+    * Supports system level events and widgets events for triggering actions.
+    * Widgets and Actions are defined in a single NodeEditor, allowing easy user configuration by visual node "programming" in a single graph.
+    * Supports the Sensors System as nodes for providing sensor data and events to the graph.
+    * User configuration is persisted in Nimbus' DataCache (key based on system name).
+    """
 
     def __init__(self, name: str):
-        super().__init__()
         self.name = name
         self.widgets: dict[str, BaseWidget] = {}
-        self.root = SystemRootPin(self)
+        self._root_node = SystemRootNode(self)
         self.edit_enabled = True
         self.edit_window_title = "Edit Widgets System"
-        self.can_be_deleted = False
-        self._output_pins = [
-            self.root,
-            actions.ActionFlow(self, PinKind.output, "Test")
-        ]
         self.node_editor = NodeEditor(self.render_node_editor_context_menu)
-        self.node_editor.nodes.append(self)
+        self.node_editor.nodes.append(self._root_node)
+
+    @property
+    def root_widget(self) -> BaseWidget:
+        """Gets the root widget of this system."""
+        return self._root_node.widget_root.child
+
+    @root_widget.setter
+    def root_widget(self, root: BaseWidget):
+        self._root_node.widget_root.child = root
 
     def render(self):
-        io = imgui.get_io()
-        MonitorManager().computer.timed_update(io.delta_time)
+        ComputerSystem().timed_update(self._root_node.delta_time)
+
+        self._root_node.on_update.trigger()
 
         imgui.begin_child("AppRootWidget")
-        if self.root.child is not None:
-            self.root.child._set_pos_and_size()
-            self.root.child.render()
+        if self.root_widget is not None:
+            self.root_widget._set_pos_and_size()
+            self.root_widget.render()
         else:
             if self.edit_enabled and imgui.begin_popup_context_window("CreateRootWidgetMenu"):
                 imgui.text("Create Root Widget:")
@@ -147,8 +189,8 @@ class WidgetSystem(Node):
         widget.system = self
         self.widgets[widget.id] = widget
         self.node_editor.add_node(widget)
-        if self.root.child is None:
-            self.root.child = widget
+        if self.root_widget is None:
+            self.root_widget = widget
         return True
 
     def deregister_widget(self, widget: BaseWidget):
@@ -172,8 +214,8 @@ class WidgetSystem(Node):
         self.widgets.pop(widget.id)
         self.node_editor.remove_node(widget)
         widget.system = None
-        if self.root.child == widget:
-            self.root.child = None
+        if self.root_widget == widget:
+            self.root_widget = None
         return True
 
     def render_create_widget_menu(self, accepted_bases: list[type[BaseWidget]] = [BaseWidget]) -> BaseWidget | None:
@@ -210,15 +252,11 @@ class WidgetSystem(Node):
     def render_create_sensor_menu(self) -> Sensor | None:
         """Renders the contents for a menu that allows the user to create a Sensor node.
 
-        Note that each Sensor is a unique object - for a given sensor from the computer, only ONE instance of Sensor
-        will exist that represents it. This method therefore doesn't create a new Sensor node, it merely returns the
-        selected Sensor.
+        Note that only one Sensor object may exist for any given sensor ID.
 
         Returns:
             Sensor: the sensor object from the MonitorManager singleton.
         """
-        computer = MonitorManager().computer
-
         def render_hw(hw: Hardware) -> Sensor:
             ret = None
             opened = imgui.begin_menu(hw.name)
@@ -228,11 +266,11 @@ class WidgetSystem(Node):
                     sub_ret = render_hw(sub_hw)
                     if sub_ret:
                         ret = sub_ret
-                for sensor in hw.sensors:
-                    if sensor not in self.editor.nodes:
-                        if menu_item(f"{sensor.name} ({sensor.type}: {sensor.unit})"):
-                            ret = sensor
-                        imgui.set_item_tooltip(f"ID: {sensor.id}\n\n{sensor.__doc__}")
+                for isensor in hw.isensors:
+                    if not isensor.sensor:
+                        if menu_item(f"{isensor.name} ({isensor.type}: {isensor.unit})"):
+                            ret = isensor.create()
+                        imgui.set_item_tooltip(f"ID: {isensor.id}\n\n{Sensor.__doc__}")
                 imgui.end_menu()
             return ret
 
@@ -240,7 +278,7 @@ class WidgetSystem(Node):
         opened = imgui.begin_menu("Sensors:")
         imgui.set_item_tooltip("Select a sensor to create as node.\n\nOnly one node of a specific sensor may exist at any given time.")
         if opened:
-            for hardware in computer:
+            for hardware in ComputerSystem():
                 ret = render_hw(hardware)
                 if ret:
                     new_sensor = ret
@@ -271,13 +309,6 @@ class WidgetSystem(Node):
             new_action = self.render_create_action_menu()
             new_sensor = self.render_create_sensor_menu()
             return new_widget or new_action or new_sensor
-
-    def get_output_pins(self) -> list[NodePin]:
-        return self._output_pins
-
-    def render_edit_details(self):
-        if menu_item("Reposition Nodes"):
-            self.reposition_nodes([actions.ActionFlow, Slot, SystemRootPin])
 
     def __str__(self):
         return f"Widget System: {self.name}"
