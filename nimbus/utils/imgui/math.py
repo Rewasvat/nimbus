@@ -53,6 +53,22 @@ class Vector2(ImVec2):
             return self.__class__(self.x / other, self.y / other)
         return self.__class__(self[0] / other[0], self[1] / other[1])
 
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        return self.as_dict()
+
+    def __setstate__(self, state: dict):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        self.x = state.get("x", 0)
+        self.y = state.get("y", 0)
+
     def length_squared(self):
         """Gets the sum of our components to the potency of 2."""
         return self.x ** 2 + self.y ** 2
@@ -110,6 +126,22 @@ class Vector2(ImVec2):
         x = min(self.x, *[v[0] for v in args])
         y = min(self.y, *[v[1] for v in args])
         return self.__class__(x, y)
+
+    def as_tuple(self):
+        """Converts this vector to a (X, Y) floats tuple.
+
+        Returns:
+            tuple[float,float]: (X, Y) tuple matching this vector.
+        """
+        return (self.x, self.y)
+
+    def as_dict(self):
+        """Converts this vector to a {X: value, Y: value} dict.
+
+        Returns:
+            dict[str,float]: dict with the components of this vector.
+        """
+        return {"x": self.x, "y": self.y}
 
     @classmethod
     def from_angle(cls, angle: float):
@@ -222,6 +254,9 @@ class Rectangle:
         """
         self._pos -= amount
         self._size += amount * 2  # x2 to compensante for position receding, and the expected amount increase.
+
+    def __str__(self):
+        return f"Rectangle({self._pos.x}, {self._pos.y}, {self._size.x}, {self._size.y})"
 
 
 def lerp[T](a: T, b: T, f: float, clamp=False) -> T:

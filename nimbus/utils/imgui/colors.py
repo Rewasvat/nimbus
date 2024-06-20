@@ -13,6 +13,24 @@ class Color(ImVec4):
         """Gets this color as a ImU32 value, used by some low-level imgui API, such as DrawLists."""
         return imgui.get_color_u32(self)
 
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        return {"x": self.x, "y": self.y, "z": self.z, "w": self.w}
+
+    def __setstate__(self, state: dict[str, float]):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        self.x = state.get("x", 0)
+        self.y = state.get("y", 0)
+        self.z = state.get("z", 0)
+        self.w = state.get("w", 0)
+
 
 class ColorsClass:
     @property
