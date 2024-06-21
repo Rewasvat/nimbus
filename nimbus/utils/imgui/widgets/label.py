@@ -2,7 +2,7 @@ import re
 import nimbus.utils.imgui.type_editor as types
 from nimbus.utils.imgui.widgets.base import LeafWidget
 from nimbus.utils.imgui.colors import Colors, Color
-from nimbus.utils.imgui.nodes_common import input_property
+from nimbus.utils.imgui.nodes import input_property
 from imgui_bundle import imgui, ImVec2
 from enum import Enum
 

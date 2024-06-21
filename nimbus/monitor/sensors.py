@@ -11,8 +11,7 @@ from nimbus.monitor.native_api import SensorType, ISensor, Computer
 from nimbus.monitor.test_sensor import TestIHardware, TestIComputer
 from nimbus.utils.imgui.math import Vector2, multiple_lerp_with_weigths
 from nimbus.utils.imgui.colors import Colors, Color
-from nimbus.utils.imgui.nodes import PinKind
-from nimbus.utils.imgui.nodes_common import CommonNode, input_property, output_property
+from nimbus.utils.imgui.nodes import PinKind, Node, input_property, output_property
 from nimbus.utils.imgui.actions import ActionFlow
 
 
@@ -420,7 +419,7 @@ class InternalSensor:
             self._sensor = None
 
 
-class Sensor(CommonNode):
+class Sensor(Node):
     """Represents a single Sensor for a hardware device.
 
     A Sensor measures a single numeric value of some kind about the hardware, such as: temperature, power usage, fan speed,

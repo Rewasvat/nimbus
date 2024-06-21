@@ -5,7 +5,7 @@ from nimbus.utils.imgui.widgets.rect import RectMixin
 from nimbus.utils.imgui.widgets.label import TextMixin
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.math import Vector2
-from nimbus.utils.imgui.nodes_common import input_property
+from nimbus.utils.imgui.nodes import input_property
 from imgui_bundle import imgui
 from enum import Enum
 

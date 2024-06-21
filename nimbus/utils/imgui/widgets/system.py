@@ -1,8 +1,7 @@
 import nimbus.utils.imgui.actions as actions
 from imgui_bundle import imgui
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
-from nimbus.utils.imgui.nodes import NodePin, NodeLink, NodeEditor, PinKind
-from nimbus.utils.imgui.nodes_common import CommonNode
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind
 from nimbus.utils.imgui.colors import Colors
 from nimbus.utils.imgui.widgets.base import BaseWidget, Slot, WidgetParentPin, draw_widget_pin_icon
 from nimbus.monitor.sensors import Sensor, Hardware, ComputerSystem
@@ -54,7 +53,7 @@ class SystemRootPin(NodePin):
         self.child = None
 
 
-class SystemRootNode(CommonNode):
+class SystemRootNode(Node):
     """Root Node for a WidgetSystem.
 
     Provides base output pins from which the system may be defined:

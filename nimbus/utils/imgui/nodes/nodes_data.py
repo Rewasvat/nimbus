@@ -1,13 +1,9 @@
-#########################################################
-# Common utilities and classes for using the Nodes system
-#########################################################
 import nimbus.utils.imgui.type_editor as types
 from imgui_bundle import imgui
 from nimbus.utils.utils import get_all_properties
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind
 from nimbus.utils.imgui.colors import Colors
 from nimbus.utils.imgui.math import Vector2
-from nimbus.utils.imgui.general import menu_item, not_user_creatable
 
 
 # TODO: permitir tipo generic (qualquer coisa), consegue linkar com qualquer outro DataPin
@@ -333,74 +329,3 @@ def create_data_pins_from_properties(node: Node):
         else:
             outputs.append(pin)
     return inputs, outputs
-
-
-# TODO: pq tudo isso não fazer parte do Node normal?
-@not_user_creatable
-class CommonNode(Node):
-    """Common Node. This is a simple base Node class that expands on Node with a few simple utilities:
-    * Has internal lists for input and output pins.
-    * Base ``get_input_pins()``/``get_output_pins()`` implementation of simply returning the list of input or output pins.
-    * Base ``delete()`` implementation of simply removing ourselves from our parent NodeEditor's list of nodes.
-    * Base ``render_edit_details()`` implementation of rendering for editing all our input DataPins.
-    * Method to directly create and add DataPins based on class properties.
-    * Default node title as class name.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self._inputs: list[NodePin] = []
-        """List of input pins of this node."""
-        self._outputs: list[NodePin] = []
-        """List of output pins of this node."""
-        self.node_title = self.__class__.__name__
-
-    def create_data_pins_from_properties(self):
-        """Creates input and output DataPins based on our ``@input/output_property``s.
-        The pins are appended directly to our lists of input and output pins."""
-        data_inputs, data_outputs = create_data_pins_from_properties(self)
-        self._inputs += data_inputs
-        self._outputs += data_outputs
-
-    def get_input_data_pin(self, name: str):
-        """Gets our INPUT DataPin with the given name.
-
-        Args:
-            name (str): name to check for.
-
-        Returns:
-            DataPin: The DataPin with the given name, or None if no pin exists.
-        """
-        for data in [pin for pin in self._inputs if isinstance(pin, DataPin)]:
-            if data.pin_name == name:
-                return data
-
-    def get_output_data_pin(self, name: str):
-        """Gets our OUTPUT DataPin with the given name.
-
-        Args:
-            name (str): name to check for.
-
-        Returns:
-            DataPin: The DataPin with the given name, or None if no pin exists.
-        """
-        for data in [pin for pin in self._outputs if isinstance(pin, DataPin)]:
-            if data.pin_name == name:
-                return data
-
-    def get_input_pins(self) -> list[NodePin]:
-        return self._inputs
-
-    def get_output_pins(self) -> list[NodePin]:
-        return self._outputs
-
-    def render_edit_details(self):
-        if len(self._inputs) > 1:
-            imgui.text("Input Pins Default Values:")
-        for pin in self._inputs:
-            if not isinstance(pin, DataPin):
-                continue
-            imgui.text(pin.pin_name)
-            imgui.set_item_tooltip(pin.pin_tooltip)
-            imgui.same_line()
-            pin.render_edit_details()

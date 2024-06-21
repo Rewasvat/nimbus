@@ -1,8 +1,7 @@
 import click
 import traceback
-from imgui_bundle import imgui, imgui_node_editor  # type: ignore
-from nimbus.utils.imgui.nodes import Node, NodePin, PinKind
-from nimbus.utils.imgui.nodes_common import CommonNode, input_property, output_property
+from imgui_bundle import imgui
+from nimbus.utils.imgui.nodes import Node, NodePin, PinKind, input_property, output_property
 from nimbus.utils.imgui.colors import Colors
 from nimbus.utils.imgui.math import Vector2
 from nimbus.utils.imgui.general import menu_item, not_user_creatable
@@ -91,7 +90,7 @@ class ActionFlow(NodePin):
 
 
 @not_user_creatable
-class Action(CommonNode):
+class Action(Node):
     """Generic code/logic execution node. A Action is a node that:
     * Is triggered by a ActionFlow pin.
     * May receive input data, from linked data pins or from its defined default values.
@@ -170,3 +169,8 @@ class Print(Action):
 # TODO: criar action que só tem um unico DataPin de output do tipo T. Nenhum flow. seria action de criar um valor estatico.
 #   - teria que criar uma derivada pra cada tipo (cada tipo no TypeDatabase que não seja Noop) parece bom
 #   - seria melhor se der pra gerar essas classes automaticamente num FOR or something.
+# NOTE: pra testar classes dinamicas que funcionam com o pickle:
+#   - FOR ou coisa do genero gerando classes dinamicamente
+#   - cria classe as usual, ou one-liner criando classe nova com type(nome, inherits, ...)  usa a classe base apropriada!
+#   - guarda a ref dessas classes numa lista se quiser pra fácil acesso de todas
+#   - guarda a ref de cada classe no contexto do modulo! Isso talvez faça ela ser pickable.

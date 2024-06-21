@@ -5,8 +5,7 @@ import nimbus.utils.imgui.actions as actions
 from nimbus.utils.imgui.math import Vector2, Rectangle
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.general import not_user_creatable, menu_item
-from nimbus.utils.imgui.nodes import NodePin, NodeLink, PinKind
-from nimbus.utils.imgui.nodes_common import CommonNode
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind
 import nimbus.utils.imgui.type_editor as types
 
 if TYPE_CHECKING:
@@ -66,7 +65,7 @@ class WidgetParentPin(NodePin):
 
 @not_user_creatable
 @types.TypeDatabase.register_noop_editor_for_this(Colors.green)
-class BaseWidget(CommonNode):
+class BaseWidget(Node):
     """Abstract Base Widget Class.
 
     Shouldn't be used on its own.
@@ -76,7 +75,7 @@ class BaseWidget(CommonNode):
 
     def __init__(self):
         super().__init__()
-        self._name: str = str(hash(self))
+        self._name: str = ""
         self.slot: Slot = None
         """Parent slot containing this widget. Might be None."""
         self._system: WidgetSystem = None
