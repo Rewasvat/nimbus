@@ -166,7 +166,7 @@ class DataPin(NodePin):
             # Remove all other links, only allow the new one. Input DataPins can only have 1 link.
             for pin, other_link in list(self._links.items()):
                 if other_link != link:
-                    self.remove_link_to(pin)
+                    other_link.delete()
 
     def __str__(self):
         return f"{self.pin_kind.name.capitalize()} Data {self.pin_name}"
@@ -387,11 +387,6 @@ class CommonNode(Node):
         for data in [pin for pin in self._outputs if isinstance(pin, DataPin)]:
             if data.pin_name == name:
                 return data
-
-    def delete(self):
-        if self.editor:
-            self.editor.remove_node(self)
-            self.editor = None
 
     def get_input_pins(self) -> list[NodePin]:
         return self._inputs

@@ -220,6 +220,7 @@ class BaseWidget(CommonNode):
 
     def delete(self):
         """Deletes this widget, removing it from its parent (if any), and deregistering it from our root WidgetSystem."""
+        super().delete()
         self.reparent_to(None)
         if self.system is not None:
             self.system.deregister_widget(self)
@@ -235,7 +236,7 @@ class BaseWidget(CommonNode):
         """
         if self.slot is not None:
             self.slot._child = None
-            self.slot.remove_link_to(self.parent_pin)
+            self.slot.delete_link_to(self.parent_pin)
         self.slot = slot
         if (slot is not None) and not slot.is_linked_to(self.parent_pin):
             slot._add_new_link(self.parent_pin)
@@ -451,6 +452,7 @@ class Slot(NodePin):
             self._child.reparent_to()
         self.parent_node._slots.remove(self)
         self.parent_node.on_slots_changed()
+        super().delete()
 
     def accepts_widget(self, widget: BaseWidget):
         """Checks if the given widget is accepted by this slot as a child.

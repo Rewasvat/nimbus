@@ -7,11 +7,21 @@ from nimbus.utils.idgen import IDManager
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
 
+def nodes_id_generator():
+    """Gets the global IDGenerator instance for the Nodes System.
+
+    This is used to generate IDs for Nodes, Pin and Links.
+
+    Returns:
+        IDGenerator: the generator instance.
+    """
+    return IDManager().get("GlobalNodeSystem")
+
+
 # TODO: mudar cor de background do node header (mostly pra diferenciar "tipos" de nodes, ver exemplos/cores nas coisas da tapps)
 # TODO: mudar cor de background do node content (mostly pra "nodes especiais")
 # TODO: permitir um sub-title abaixo do name do nome, no header.
 # TODO: linha separando header do content.
-# TODO: reciclar node/pin/link-ids caso o tal objeto seja deletado.
 class Node:
     """Utility class to represent a Node in imgui's Node Editor.
 
@@ -26,7 +36,7 @@ class Node:
     """
 
     def __init__(self):
-        self.node_id = imgui_node_editor.NodeId(IDManager().get("GlobalNodeSystem").create())
+        self.node_id = imgui_node_editor.NodeId(nodes_id_generator().create())
         self.can_be_deleted = True
         """If this object can be deleted by user-interaction."""
         self.is_selected = False
@@ -191,10 +201,15 @@ class Node:
     def delete(self):
         """Deletes this node.
 
-        Implementations should override this to have their logic for deleting the node and removing it from the editor's nodes list.
-        Default does nothing.
+        Implementations should override this to add their logic for when a node is deleted.
+        Default deletes its pins, removes the node from its editor, and recycles its ID.
         """
-        pass
+        for pin in self.get_input_pins() + self.get_output_pins():
+            pin.delete()
+        if self.editor:
+            self.editor.remove_node(self)
+            self.editor = None
+        nodes_id_generator().recycle(self.node_id.id())
 
     def walk_in_graph(self, callback: Callable[['Node', int], bool], allowed_outputs: list[type['NodePin']], starting_level=0,
                       walked_nodes: set['Node'] = None):
@@ -332,7 +347,7 @@ class NodePin:
         self.parent_node: Node = parent
         # TODO: talvez tenhamos que atualizar a associacao do pin_name->id se pin name trocar
         self.pin_name = name
-        self.pin_id = imgui_node_editor.PinId(IDManager().get("GlobalNodeSystem").create(f"node{parent.node_id.id()}_pin_{name}"))
+        self.pin_id = imgui_node_editor.PinId(nodes_id_generator().create(f"node{parent.node_id.id()}_pin_{name}"))
         self.pin_kind = kind
         self._links: dict[NodePin, NodeLink] = {}
         """Dict of all links this pin have. Keys are the opposite pins, which along with us forms the link."""
@@ -448,11 +463,13 @@ class NodePin:
         pin.on_new_link_added(link)
         return link
 
-    def remove_link_to(self, pin: 'NodePin'):
-        """Tries to remove a link between this and the given pin.
+    def delete_link_to(self, pin: 'NodePin'):
+        """Tries to delete a link between this and the given pin.
 
-        This checks if a link between us exists, and if so, removes the link from us, executes
-        the ``on_link_removed`` callbacks (on both pins), and returns the removed link object.
+        This checks if a link between us exists, and if so, calls ``link.delete()`` to delete it
+        and remove it from both pins.
+
+        The ``on_link_removed`` callbacks (on both pins) will be called with the link object.
 
         Args:
             pin (NodePin): the other pin to remove link from.
@@ -461,17 +478,15 @@ class NodePin:
             NodeLink: the link object that was removed, or None if no link between us existed.
             ``get_link`` or ``is_linked_to`` can be used to check if link exists.
         """
-        if not self.is_linked_to(pin):
-            return
-        link = self._remove_link(pin)
-        self.on_link_removed(link)
-        pin.on_link_removed(link)
+        link = self.get_link(pin)
+        if link:
+            link.delete()
         return link
 
-    def remove_all_links(self):
+    def delete_all_links(self):
         """Removes all links from this pin."""
-        for pin in list(self._links.keys()):
-            self.remove_link_to(pin)
+        for link in list(self._links.values()):
+            link.delete()
 
     def _add_new_link(self, pin: 'NodePin') -> 'NodeLink':
         """Internal method to create a new link between this and the given pin, and add it
@@ -499,8 +514,10 @@ class NodePin:
     def _remove_link(self, pin: 'NodePin'):
         """Internal method to remove the link between this and the given pin, from both pins.
 
-        Use with care! This does no safety checks, nor calls the link-removed callbacks. See ``remove_link_to`` for
-        the proper method to use to remove links. As such, this will error out if trying to remove a link that doesn't exist.
+        This checks if a link between us exists, and if so, removes the link from us, executes
+        the ``on_link_removed`` callbacks (on both pins), and returns the removed link object.
+
+        This only removes the link from the pins. Proper way to delete a link is call ``link.delete()`` or ``pin.delete_link_to(other)``.
 
         Args:
             pin (NodePin): the pin to remove link to.
@@ -508,8 +525,13 @@ class NodePin:
         Returns:
             NodeLink: the removed link object.
         """
+        if not self.is_linked_to(pin):
+            return
         pin._links.pop(self)
-        return self._links.pop(pin)
+        link = self._links.pop(pin)
+        self.on_link_removed(link)
+        pin.on_link_removed(link)
+        return link
 
     def on_new_link_added(self, link: 'NodeLink'):
         """Internal callback called when a new link is added to this pin.
@@ -538,9 +560,11 @@ class NodePin:
         """Deletes this pin.
 
         Implementations should override this to have their logic for deleting the pin and removing it from its parent node.
-        Default does nothing.
+        Default recycles this pin's ID.
         """
-        pass
+        # Imgui Node Editor automatically schedules for removal links connected to a deleted pin.
+        # That will call link.delete() which will recycle it, so no need to manually delete links here.
+        nodes_id_generator().recycle(self.pin_id.id())
 
     def __getstate__(self):
         """Pickle Protocol: overriding getstate to allow pickling this class.
@@ -585,7 +609,7 @@ class NodeLink:
     """
 
     def __init__(self, start_pin: NodePin, end_pin: NodePin, id: imgui_node_editor.LinkId = None, color: Color = None, thickness: float = None):
-        self.link_id = imgui_node_editor.LinkId(IDManager().get("GlobalNodeSystem").create()) if id is None else id
+        self.link_id = imgui_node_editor.LinkId(nodes_id_generator().create()) if id is None else id
         self.start_pin: NodePin = start_pin
         """The pin that starts this link. This should be a output pin."""
         self.end_pin: NodePin = end_pin
@@ -626,6 +650,13 @@ class NodeLink:
         """
         direction = imgui_node_editor.FlowDirection.backward if reversed else imgui_node_editor.FlowDirection.forward
         imgui_node_editor.flow(self.link_id, direction)
+
+    def delete(self):
+        """Deletes this link.
+
+        Removes it from both start/end pins, and recycles our ID."""
+        self.start_pin._remove_link(self.end_pin)
+        nodes_id_generator().recycle(self.link_id.id())
 
     def __str__(self):
         return f"({self.start_pin})== link to =>({self.end_pin})"
@@ -899,7 +930,7 @@ class NodeEditor:
                     # Then remove link from your data.
                     link = self.find_link(deleted_link_id)
                     if link:
-                        link.start_pin.remove_link_to(link.end_pin)
+                        link.delete()
             imgui_node_editor.end_delete()
 
     def handle_node_context_menu_interactions(self):
@@ -968,7 +999,7 @@ class NodeEditor:
             if pin:
                 imgui.separator()
                 if menu_item("Remove All Links"):
-                    pin.remove_all_links()
+                    pin.delete_all_links()
                 if pin.can_be_deleted:
                     if menu_item("Delete"):
                         pin.delete()

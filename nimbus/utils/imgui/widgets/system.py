@@ -28,7 +28,7 @@ class SystemRootPin(NodePin):
         if self._child == value:
             return
         if self._child and self.is_linked_to(self._child.parent_pin):
-            self.remove_link_to(self._child.parent_pin)
+            self.delete_link_to(self._child.parent_pin)
         self._child = value
         if value:
             value.reparent_to(None)  # root widgets have no Slot parent.
