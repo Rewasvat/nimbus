@@ -45,6 +45,24 @@ def safe_pickle_save(file_path: str, data):
     return success
 
 
+def update_module_path_in_pickled_object(pickle_path: str, old_module_path: str, new_module):
+    """Update a python module's dotted path in a pickle dump if the corresponding file was renamed.
+
+    Implements the advice in https://stackoverflow.com/a/2121918.
+
+    Args:
+        pickle_path (str): Path to the pickled object.
+        old_module_path (str): The old.dotted.path.to.renamed.module.
+        new_module (ModuleType): from new.location import module.
+    """
+    # NOTE: this might not be working...
+    import sys
+    sys.modules[old_module_path] = new_module
+    dic = pickle.load(open(pickle_path, "rb"))
+    del sys.modules[old_module_path]
+    pickle.dump(dic, open(pickle_path, "wb"))
+
+
 class DataCache(metaclass=Singleton):
     """Singleton class that holds Nimbus's global state. This can be used by other scripts to store/access
     global data as a kind of cache."""
@@ -141,9 +159,13 @@ class DataCache(metaclass=Singleton):
         custom_data_keys: set[str] = self.get_data("custom_data_keys", set())
         data = self._custom_data.get(key)
         if data is None and key in custom_data_keys:
-            with open(self._get_custom_cache_path(key), 'rb') as file_obj:
-                data = pickle.load(file_obj)
-            self._custom_data[key] = data
+            cache_path = self._get_custom_cache_path(key)
+            if os.path.isfile(cache_path):
+                with open(cache_path, 'rb') as file_obj:
+                    data = pickle.load(file_obj)
+                self._custom_data[key] = data
+            else:
+                click.secho(f"[ERROR] Custom Cache file for '{key}' doesn't exist.", fg="red")
         return data or default
 
     def save_custom_cache(self, key: str, value):
