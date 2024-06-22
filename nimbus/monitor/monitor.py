@@ -277,7 +277,7 @@ class MonitorApp(windows.AppWindow):
 
 # TODO: ter uma lista de WidgetSystem existente, e ai:
 #   - permitir user escolher qual system vai ver/editar
-#   - permitir user criar/deletar system
+#   - permitir user criar/deletar system (ao deletar um system, reciclar todos nodes/pins/links)
 #   - deixar só um system carregado por vez. (vai precisar de algum delete()/clear() no WidgetSystem pra deletar todos seus nodes,
 #     pros Sensores limpares os InternalSensor...)
 class WidgetsTestApp(windows.AppWindow):

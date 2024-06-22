@@ -516,6 +516,8 @@ class ColorEditor(TypeEditor):
         self.color = Color(1, 0.5, 0.3, 1)
 
     def draw_value_editor(self, value: Color):
+        if value is None:
+            value = imgui.ImVec4(1, 1, 1, 1)
         changed, new_value = imgui.color_edit4("##", value, self.flags)
         if changed:
             value = Color(*new_value)

@@ -2,7 +2,7 @@ import nimbus.utils.imgui.actions as actions
 from imgui_bundle import imgui
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind
-from nimbus.utils.imgui.colors import Colors
+from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.widgets.base import BaseWidget, Slot, WidgetParentPin, draw_widget_pin_icon
 from nimbus.monitor.sensors import Sensor, Hardware, ComputerSystem
 from nimbus.data import DataCache
@@ -70,6 +70,8 @@ class SystemRootNode(Node):
         self._outputs.append(self.widget_root)
         self._outputs.append(self.on_update)
         self.node_title = str(system)
+        self.node_bg_color = Color(0.12, 0.22, 0.1, 0.75)
+        self.node_header_color = Color(0.32, 0.6, 0.04, 0.6)
         self.can_be_deleted = False
         self.create_data_pins_from_properties()
 
@@ -93,6 +95,7 @@ class SystemRootNode(Node):
 # TODO: mudar nome disso? afinal agora junta widgets+actions+sensors
 # TODO: talvez de pra separar o "WidgetSystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
 #       e finalmente uma com widget+actions+sensores
+# TODO: atalho de teclado pro save
 class WidgetSystem:
     """Represents a complete user-configurable UI and logic system.
 

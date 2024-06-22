@@ -1,6 +1,6 @@
 import math
 import nimbus.utils.imgui.type_editor as types
-from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.widgets.rect import RectMixin
 from nimbus.utils.imgui.widgets.label import TextMixin
 from nimbus.utils.imgui.colors import Colors, Color
@@ -38,6 +38,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         LeafWidget.__init__(self)
         RectMixin.__init__(self)
         TextMixin.__init__(self)
+        self.node_header_color = WidgetColors.Interactible
         self.color = Colors.grey
         self._frame_thickness: float = 5.0
         self._bar_type: BarType = BarType.HORIZONTAL

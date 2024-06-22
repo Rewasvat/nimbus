@@ -23,8 +23,10 @@ def get_all_links_from_nodes(nodes: list[Node]):
     return list(dict.fromkeys(links))
 
 
-# TODO: copy/paste/cut
+# TODO: copy/paste/cut (com suporte aos atalhos de teclado)
+#   - testar o role de shortcuts do imgui-node-editor
 # TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
+# TODO: atalho de teclado pro Fit To Window
 class NodeEditor:
     """Represents a Node Editor system.
 

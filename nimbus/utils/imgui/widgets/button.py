@@ -1,6 +1,6 @@
 import nimbus.utils.imgui.actions as actions
 import nimbus.utils.imgui.nodes as nodes
-from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.widgets.rect import RectMixin
 from nimbus.utils.imgui.widgets.label import TextMixin
 
@@ -16,6 +16,7 @@ class Button(RectMixin, TextMixin, LeafWidget):
         LeafWidget.__init__(self)
         RectMixin.__init__(self)
         TextMixin.__init__(self)
+        self.node_header_color = WidgetColors.Interactible
         self._on_clicked = actions.ActionFlow(self, nodes.PinKind.output, "On Click")
         self._outputs.append(self._on_clicked)
 

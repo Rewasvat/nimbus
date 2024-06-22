@@ -12,6 +12,27 @@ if TYPE_CHECKING:
     from nimbus.utils.imgui.widgets.system import WidgetSystem
 
 
+class WidgetColors:
+    """Color constants related to Widgets."""
+
+    Containers = Color(108 / 255, 176 / 255, 10 / 255, 0.6)
+    """Header color for Containers-related widgets."""
+    Interactible = Color(11 / 255, 156 / 255, 140 / 255, 0.6)
+    """Header color for widgets that are interactible in some form to the user (like buttons and bars)."""
+    Primitives = Color(255 / 255, 112 / 255, 143 / 255, 0.6)
+    """Header color for primitives-related widgets. Normally basic leaf widgets, like Rect and Label."""
+    Animated = Color(63 / 255, 170 / 255, 255 / 255, 0.6)
+    """Header color for animated-related widgets."""
+    Assets = Color(181 / 255, 104 / 255, 255 / 255, 0.6)
+    """Header color for assets-related widgets like a image display and so on."""
+    External = Color(212 / 255, 196 / 255, 21 / 255, 0.6)
+    """Header color for external-related widgets."""
+    WidgetPin = Colors.green
+    """Widget pin color."""
+    EditSlotHeader = Color(0.1, 0.5, 0.3, 1)
+    """Color the the collapsible-header of the edit-menu of a Slot."""
+
+
 def insert_base_init(sub_cls: type, base_cls: type):
     """Updates the SUB_CLS __init__ method to automatically call, without arguments, the BASE_CLS __init__ method.
     To be used in a ``__init__subclass__(cls)`` method.
@@ -41,7 +62,7 @@ def draw_widget_pin_icon(is_filled):
     p1 = Vector2.from_cursor_screen_pos()
     p2 = p1 + (size, size * 0.5)
     p3 = p1 + (0, size)
-    color = Colors.green.u32
+    color = WidgetColors.WidgetPin.u32
     if is_filled:
         draw.add_triangle_filled(p1, p2, p3, color)
     else:
@@ -64,7 +85,7 @@ class WidgetParentPin(NodePin):
 
 
 @not_user_creatable
-@types.TypeDatabase.register_noop_editor_for_this(Colors.green)
+@types.TypeDatabase.register_noop_editor_for_this(WidgetColors.WidgetPin)
 class BaseWidget(Node):
     """Abstract Base Widget Class.
 
@@ -332,13 +353,13 @@ class Slot(NodePin):
         """The types accepted by this slot as children (subclasses of them are accepted as well). Subclasses of slots should
         override this as desired. Default is to allow ``BaseWidget`` and thus, all of its subclasses (all widgets)."""
         self._draw_area_outline = False
-        self._area_outline_color: Color = Color(1, 1, 1, 1)
+        self._area_outline_color: Color = Colors.white
         self.enabled = True
         """If this slot is enabled. Disabled slots are not rendered."""
         self.edit_ignored_properties: set[str] = set()
         """Set of imgui-property names that shall be ignored when rendering this widget's imgui-properties through the
         default ``self.render_edit_details()`` implementation."""
-        self.default_link_color = Colors.green  # same color used in draw_widget_pin_icon
+        self.default_link_color = WidgetColors.WidgetPin
         self.can_be_deleted = True
 
     @types.bool_property()
@@ -526,6 +547,7 @@ class ContainerWidget(BaseWidget):
         self.accepts_new_slots = True
         """If user-interaction (while editing) can add new slots to this container."""
         self._edit_slot_header_color = Color(0.1, 0.5, 0.3, 1)
+        self.node_header_color = WidgetColors.Containers
 
     @property
     def slots(self):

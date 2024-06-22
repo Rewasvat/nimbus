@@ -2,7 +2,7 @@ import click
 import traceback
 from imgui_bundle import imgui
 from nimbus.utils.imgui.nodes import Node, NodePin, PinKind, input_property, output_property
-from nimbus.utils.imgui.colors import Colors
+from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.math import Vector2
 from nimbus.utils.imgui.general import menu_item, not_user_creatable
 
@@ -143,8 +143,35 @@ class Action(Node):
                 flow.trigger()
 
 
+class ActionColors:
+    """Color constants related to Actions."""
+
+    Debug = Color(1, 0, 0, 0.6)
+    """Header color for debug-related actions."""
+    Widget = Color(0, 0.7, 0, 0.6)
+    """Header color for widget-related actions."""
+    Operations = Color(0, 0, 1, 0.5)
+    """Header color for actions that are basic operations, such as math ops, boolean ops, and so on."""
+    Logic = Color(0.3, 0.3, 0.5, 0.6)
+    """Header color for logic flow related actions. Such as IF branching, FOR looping, etc"""
+    Conversion = Color(0, 0.8, 0.8, 0.5)
+    """Header color for type-conversion and simple type creation related actions."""
+    Time = Color(0, 0.5, 0.8, 0.5)
+    """Header color for time-related actions."""
+    Events = Color(0.8, 0, 0, 0.5)
+    """Header color for event-related actions."""
+    Remote = Color(0.9, 0.5, 0, 0.5)
+    """Header color for "remote"-related actions, such as HTTP requests and so on."""
+    Special = Color(0.5, 0, 0.5, 0.6)
+    """Header color for special-related actions."""
+
+
 class Print(Action):
     """Prints a value to the terminal."""
+
+    def __init__(self):
+        super().__init__()
+        self.node_header_color = ActionColors.Debug
 
     @input_property()
     def text(self) -> str:
@@ -156,7 +183,6 @@ class Print(Action):
 
 
 # TODO: criar as várias actions que já precisaremos de inicio
-# TODO: mudar design básico dos nodes, pra diferenciar entre Widgets, Actions, e provavelmente Sensors tb se ele for um node em si.
 # TODO: ver se dá pra fazer um decorator que ao ser posto numa function, cria uma action que:
 #   - recebe os mesmos params da func como inputs da action
 #      - principalmente, ver se isso funcionaria com métodos de classes, onde o `self` seria um input a receber tb.

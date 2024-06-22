@@ -1,11 +1,15 @@
 import nimbus.utils.imgui.type_editor as types
-from nimbus.utils.imgui.actions import Action, input_property, output_property
+from nimbus.utils.imgui.actions import Action, input_property, output_property, ActionColors
 from nimbus.utils.imgui.nodes import PinKind
 from nimbus.utils.imgui.widgets import Board
 
 
 class SetBoard(Action):
     """Changes the selected child slot in a Board widget to the given name."""
+
+    def __init__(self):
+        super().__init__()
+        self.node_header_color = ActionColors.Widget
 
     @input_property()
     def board(self) -> Board:

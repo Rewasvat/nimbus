@@ -1,6 +1,6 @@
 import re
 import nimbus.utils.imgui.type_editor as types
-from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.nodes import input_property
 from imgui_bundle import imgui, ImVec2
@@ -182,6 +182,7 @@ class Label(TextMixin, LeafWidget):
     def __init__(self, text: str = ""):
         LeafWidget.__init__(self)
         TextMixin.__init__(self, text)
+        self.node_header_color = WidgetColors.Primitives
 
     def render(self):
         self._draw_text()

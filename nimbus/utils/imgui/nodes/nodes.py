@@ -20,10 +20,7 @@ def nodes_id_generator():
     return IDManager().get("GlobalNodeSystem")
 
 
-# TODO: mudar cor de background do node header (mostly pra diferenciar "tipos" de nodes, ver exemplos/cores nas coisas da tapps)
-# TODO: mudar cor de background do node content (mostly pra "nodes especiais")
 # TODO: permitir um sub-title abaixo do name do nome, no header.
-# TODO: linha separando header do content.
 class Node:
     """Utility class to represent a Node in imgui's Node Editor.
 
@@ -50,6 +47,11 @@ class Node:
         self._outputs: list[NodePin] = []
         """List of output pins of this node."""
         self._node_title: str = self.__class__.__name__
+        self.node_bg_color: Color = None
+        """The color of the node background. If None, will use the default color."""
+        self.node_header_color: Color = None
+        """The color of the node's header. If None, header won't be colored, will be directly above the node's background."""
+        self._node_header_height = 0.0
 
     @property
     def node_title(self) -> str:
@@ -73,6 +75,9 @@ class Node:
 
         This should only be called inside a imgui-node-editor rendering context.
         """
+        if self.node_bg_color:
+            imgui_node_editor.push_style_color(imgui_node_editor.StyleColor.node_bg, self.node_bg_color)
+
         imgui_node_editor.begin_node(self.node_id)
         imgui.push_id(repr(self))
         imgui.begin_vertical(f"{repr(self)}NodeMain")
@@ -95,8 +100,10 @@ class Node:
         # footer? como?
         imgui.pop_id()
         imgui_node_editor.end_node()
-
         self.is_selected = imgui_node_editor.is_node_selected(self.node_id)
+
+        if self.node_bg_color:
+            imgui_node_editor.pop_style_color()
 
     def draw_node_header(self):
         """Used internally to draw the node's header region.
@@ -106,6 +113,15 @@ class Node:
         the docstring of this object's type.
         """
         imgui.begin_horizontal(f"{repr(self)}NodeHeader")
+        # Header Color
+        if self.node_header_color:
+            border_size = imgui_node_editor.get_style().node_border_width
+            rounding = imgui_node_editor.get_style().node_rounding - border_size
+            pos = self.node_area.position + border_size
+            size = Vector2(self.node_area.size.x - border_size, self._node_header_height) - border_size
+            draw = imgui.get_window_draw_list()
+            draw.add_rect_filled(pos, pos+size, self.node_header_color.u32, rounding, imgui.ImDrawFlags_.round_corners_top)
+        # Header Text (with tooltip)
         imgui.spring(1)
         imgui.text_unformatted(self.node_title)
         imgui_node_editor.suspend()
@@ -113,8 +129,24 @@ class Node:
         imgui_node_editor.resume()
         imgui.spring(1)
         imgui.end_horizontal()
-        # space between header and node content
-        imgui.spring(0, imgui.get_style().item_spacing.y * 2)
+        # space/splitter between header and node content
+        imgui.spring(0, imgui.get_style().item_spacing.y * 1)
+        self._node_header_height = imgui.get_item_rect_max().y - self.node_area.position.y
+        self.draw_node_splitter()
+        imgui.spring(0, imgui.get_style().item_spacing.y * 1 + 4)
+
+    def draw_node_splitter(self):
+        """Draws a horizontal line across the Node's width, like a ``imgui.separator()``.
+        The line is positioned at the current Y in the drawing (just after the previous item).
+
+        This is mainly used for the line separating the header to the content (pins) area. However it should work for
+        drawing other horizontal lines in the node.
+        """
+        border_size = imgui_node_editor.get_style().node_border_width
+        pos = Vector2(self.node_area.position.x + border_size, imgui.get_item_rect_max().y)
+        size = Vector2(self.node_area.size.x - border_size * 2, 0)
+        draw = imgui.get_window_draw_list()
+        draw.add_line(pos, pos+size, Colors.white.u32)
 
     def draw_node_inputs(self):
         """Used internally to draw the node's input region.
@@ -525,8 +557,7 @@ class NodePin:
 
     def delete_all_links(self):
         """Removes all links from this pin."""
-        for link in list(self._links.values()):
-            link.delete()
+        imgui_node_editor.break_links(self.pin_id)
 
     def _add_new_link(self, pin: 'NodePin') -> 'NodeLink':
         """Internal method to create a new link between this and the given pin, and add it

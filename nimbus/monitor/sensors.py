@@ -451,6 +451,8 @@ class Sensor(Node):
         self._enabled: bool = None
         self._minmax_ever: Vector2 = Vector2(math.inf, -math.inf)
         # NODE-RELATED ATTRIBUTES
+        self.node_header_color = Color(0.3, 0, 0, 0.6)
+        self.node_bg_color = Color(0.2, 0.12, 0.12, 0.75)
         self.node_title = f"{self.hardware.full_name}\n{self.name} {self.type}"
         self._on_update_pin = ActionFlow(self, PinKind.output, "On Update")
         self._on_update_pin.pin_tooltip = "Triggered when this Sensor is updated, getting a new value from the hardware."

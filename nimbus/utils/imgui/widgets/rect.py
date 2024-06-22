@@ -1,5 +1,5 @@
 import nimbus.utils.imgui.type_editor as types
-from nimbus.utils.imgui.widgets.base import LeafWidget
+from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.nodes import input_property
 from imgui_bundle import imgui
@@ -109,6 +109,7 @@ class Rect(RectMixin, LeafWidget):
     def __init__(self, color: Color = None):
         LeafWidget.__init__(self)
         RectMixin.__init__(self, color)
+        self.node_header_color = WidgetColors.Primitives
 
     def render(self):
         self._draw_rect()
