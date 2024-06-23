@@ -20,7 +20,6 @@ def nodes_id_generator():
     return IDManager().get("GlobalNodeSystem")
 
 
-# TODO: permitir um sub-title abaixo do name do nome, no header.
 class Node:
     """Utility class to represent a Node in imgui's Node Editor.
 

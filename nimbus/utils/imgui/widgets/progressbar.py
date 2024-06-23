@@ -108,7 +108,7 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         draw = imgui.get_window_draw_list()
         pos = self.position
         bottom_right = self.bottom_right_pos
-        draw.add_rect_filled(pos, bottom_right, self.color.u32, self.rounding, self._get_draw_flags())
+        draw.add_rect_filled(pos, bottom_right, self.color.u32, self.actual_rounding, self._get_draw_flags())
 
         hor_fraction = self.value if is_horizontal else 1.0
         ver_fraction = self.value if (not is_horizontal) else 1.0
@@ -118,9 +118,9 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         else:
             bar_start_pos = pos
             bar_end_pos = pos + self._area * (hor_fraction, ver_fraction)
-        draw.add_rect_filled(bar_start_pos, bar_end_pos, self.bar_color.u32, self.rounding, self._get_draw_flags())
+        draw.add_rect_filled(bar_start_pos, bar_end_pos, self.bar_color.u32, self.actual_rounding, self._get_draw_flags())
 
-        draw.add_rect(pos, bottom_right, self.frame_color.u32, self.rounding, self._get_draw_flags(), self._frame_thickness)
+        draw.add_rect(pos, bottom_right, self.frame_color.u32, self.actual_rounding, self._get_draw_flags(), self._frame_thickness)
 
     def _draw_circle_bar(self):
         """Draws the circle-type bars."""

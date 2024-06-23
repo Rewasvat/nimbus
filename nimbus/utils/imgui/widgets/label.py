@@ -3,7 +3,8 @@ import nimbus.utils.imgui.type_editor as types
 from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.nodes import input_property
-from imgui_bundle import imgui, ImVec2
+from nimbus.utils.imgui.math import Vector2, Rectangle
+from imgui_bundle import imgui
 from enum import Enum
 
 
@@ -21,7 +22,6 @@ class TextAlignment(Enum):
 
 
 # TODO: implementar margin pra renderizar texto pouco mais longe das bordas qdo não no CENTER
-# TODO: fazer funcionar quando tiver \n no texto pra quebrar em 2 linhas
 class TextMixin:
     """Simple text widget."""
 
@@ -30,7 +30,7 @@ class TextMixin:
         self._wrapped = False
         self._align: TextAlignment = TextAlignment.CENTER
 
-    @input_property()
+    @input_property(multiline=True)
     def text(self) -> str:
         """The text being displayed [GET/SET]"""
         return ""  # this is essentially the default value.
@@ -73,18 +73,20 @@ class TextMixin:
         return 1.0  # this is essentially the default value.
 
     def _draw_text(self):
-        """Internal utility to render our label text."""
+        """Internal utility to render our label's text."""
         if self.text is not None and len(self.text) > 0:
-            text = self._format_text(self.text)
-            area_size = imgui.get_content_region_avail()
-            wrap_width = area_size.x if self._wrapped else 0
-            text_size = imgui.calc_text_size(text, wrap_width=wrap_width)
+            lines = self._format_text(self.text).split("\n")
+            wrap_width = self._area.x if self._wrapped else 0
+            line_rects: list[Rectangle] = []
+            for line in lines:
+                y = line_rects[-1].bottom_left_pos.y if len(line_rects) > 0 else 0
+                line_rect = Rectangle((0, y), imgui.calc_text_size(line, wrap_width=wrap_width))
+                line_rects.append(line_rect)
+            text_rect = sum(line_rects, line_rects[0])
 
             font = imgui.get_font()
             font_height = font.font_size
-            max_font_scale_h = area_size.y / text_size.y
-            max_font_scale_w = area_size.x / text_size.x
-            max_font_scale = min(max_font_scale_w, max_font_scale_h)
+            max_font_scale = (self._area / text_rect.size).min_component()
 
             actual_scale = 1.0
             if self.scale > 1:
@@ -92,43 +94,76 @@ class TextMixin:
             elif self.scale > 0:
                 actual_scale = self.scale
 
-            text_size.x *= actual_scale
-            text_size.y *= actual_scale
-            text_pos = self._get_text_pos(area_size, text_size)
+            text_rect = self._update_line_rects(line_rects, actual_scale)
 
             draw_list = imgui.get_window_draw_list()
-            draw_list.add_text(
-                font=font,
-                font_size=font_height*actual_scale,
-                pos=text_pos,
-                col=self.text_color.u32,
-                text_begin=text,
-                text_end=None,
-                wrap_width=wrap_width,
-                cpu_fine_clip_rect=None
-            )
+            draw_list.add_rect(text_rect.position, text_rect.bottom_right_pos, Colors.green.u32)
+            for line, line_rect in zip(lines, line_rects):
+                draw_list.add_rect(line_rect.position, line_rect.bottom_right_pos, Colors.red.u32)
+                draw_list.add_text(
+                    font=font,
+                    font_size=font_height*actual_scale,
+                    pos=line_rect.position,
+                    col=self.text_color.u32,
+                    text_begin=line,
+                    text_end=None,
+                    wrap_width=wrap_width,
+                    cpu_fine_clip_rect=None
+                )
 
-    def _get_text_pos(self, area_size: ImVec2, text_size: ImVec2):
-        """Calculates the position (top-left corner) of our text-rect (given by its size) for drawing in our
-        area, given the the area size and our text alignment setting.
+    def _update_line_rects(self, line_rects: list[Rectangle], scale: float):
+        """Updates the position and size of each line rectangle according to our current text alignment
+        and given scale.
 
-        Returns the position in absolute coords, for use with Imgui.DrawLists.
+        The line rectangles will be updated in-place. After this, these lines will be ready for text-drawing.
+
+        Args:
+            line_rects (list[Rectangle]): list of line rectangles of this label. At this point passed as input here,
+            each line's position means nothing, but its size is the text line's size in regular font-size (no scaling)
+            with text-wrap applied. After this method, these rectangles will've been updated in-place with their proper
+            positions and scaled sizes.
+            scale (float): The current actual scale for drawing text in this label.
+
+        Returns:
+            Rectangle: the rectangle bounding all updated line rectangles.
         """
-        pos = imgui.get_cursor_screen_pos()
+        pos = Vector2.from_cursor_screen_pos()
+        prev_y = 0.0
+        # Adjust positions of each line.
+        for rect in line_rects:
+            rect.size = rect.size * scale
+            rect.position = self._get_text_pos(rect.size) + (0, prev_y)
+            prev_y += rect.size.y
+
+        # Adjust position of whole group of lines
+        text_rect = sum(line_rects, line_rects[0])
+        group_offset = text_rect.position
+        text_rect.position = pos + self._get_text_pos(text_rect.size)
+        for rect in line_rects:
+            rect.position += text_rect.position - group_offset
+        return text_rect
+
+    def _get_text_pos(self, text_size: Vector2):
+        """Calculates the position offset (top-left corner) of the given text size for drawing in our
+        area, given the area size and our text alignment setting.
+
+        Returns the offset in absolute coords.
+        """
+        pos = Vector2()
         if self.align == TextAlignment.TOP_LEFT:
             return pos
 
         # Update Pos X
         if self.align in (TextAlignment.TOP_RIGHT, TextAlignment.RIGHT, TextAlignment.BOTTOM_RIGHT):
-            pos.x += area_size.x - text_size.x
+            pos.x += self._area.x - text_size.x
         elif self.align in (TextAlignment.TOP, TextAlignment.CENTER, TextAlignment.BOTTOM):
-            pos.x += area_size.x * 0.5 - text_size.x * 0.5
+            pos.x += self._area.x * 0.5 - text_size.x * 0.5
 
         # Update Pos Y
         if self.align in (TextAlignment.BOTTOM_LEFT, TextAlignment.BOTTOM, TextAlignment.BOTTOM_RIGHT):
-            pos.y += area_size.y - text_size.y - 1
+            pos.y += self._area.y - text_size.y - 1
         elif self.align in (TextAlignment.LEFT, TextAlignment.CENTER, TextAlignment.RIGHT):
-            pos.y += area_size.y * 0.5 - text_size.y * 0.5
+            pos.y += self._area.y * 0.5 - text_size.y * 0.5
 
         return pos
 

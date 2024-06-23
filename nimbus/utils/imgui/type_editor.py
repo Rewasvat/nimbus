@@ -367,6 +367,7 @@ class StringEditor(TypeEditor):
         self.docs: list[str] | dict[str, str] | None = data.get("docs")
         self.option_flags: imgui.SelectableFlags_ = data.get("flags", 0)
         self.add_tooltip_after_value = self.options is None
+        self.multiline: bool = data.get("multiline", False)
         self.color = Colors.magenta
         self.can_accept_any_input = True
         self.convert_value_to_type = True
@@ -375,7 +376,12 @@ class StringEditor(TypeEditor):
         if self.options is None:
             if value is None:
                 value = ""
-            return imgui.input_text("##", value, flags=self.flags)
+            if self.multiline:
+                num_lines = value.count("\n") + 1
+                size = (0, num_lines * imgui.get_text_line_height_with_spacing())
+                return imgui.input_text_multiline("##", value, size, flags=self.flags)
+            else:
+                return imgui.input_text("##", value, flags=self.flags)
         else:
             return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, flags=self.option_flags)
 

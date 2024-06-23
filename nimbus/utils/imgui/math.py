@@ -127,6 +127,22 @@ class Vector2(ImVec2):
         y = min(self.y, *[v[1] for v in args])
         return self.__class__(x, y)
 
+    def max_component(self):
+        """Gets the maximum value amongst the components of this vector.
+
+        Returns:
+            float: the maximum component.
+        """
+        return max(*self)
+
+    def min_component(self):
+        """Gets the minimum value amongst the components of this vector.
+
+        Returns:
+            float: the minimum component.
+        """
+        return min(*self)
+
     def as_tuple(self):
         """Converts this vector to a (X, Y) floats tuple.
 
