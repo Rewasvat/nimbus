@@ -1,3 +1,4 @@
+import typing
 import inspect
 import nimbus.utils.command_utils as cmd_utils
 from enum import Enum
@@ -17,6 +18,7 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
 
     def __init__(self):
         self._types: dict[type, type[TypeEditor]] = {}
+        self._creatable_types: dict[type, bool] = {}
 
     def get_editor_type(self, value_type: type):
         """Gets the registered TypeEditor class for editing the given value type.
@@ -33,17 +35,29 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
             if cls in self._types:
                 return self._types[cls]
 
-    def add_type_editor(self, cls: type, editor_class: type['TypeEditor']):
+    def add_type_editor(self, cls: type, editor_class: type['TypeEditor'], is_creatable=True):
         """Adds a new TypeEditor class in this database associated with the given type.
 
         Args:
             cls (type): The value-type that the given Editor class can edit.
             editor_class (type[TypeEditor]): The TypeEditor class being added, that can edit the given ``cls`` type.
+            is_creatable (bool, optional): If this type, with the given editor class, will be creatable via editor. Defaults to True.
         """
         self._types[cls] = editor_class
+        self._creatable_types[cls] = is_creatable
+
+    def get_creatable_types(self):
+        """Gets the list of available types in the database that can be created simply with their editors.
+
+        This is the list of all types that were registed as being creatable.
+
+        Returns:
+            list[type]: list of types with proper registered editors.
+        """
+        return [cls for cls, is_creatable in self._creatable_types.items() if is_creatable]
 
     @classmethod
-    def register_editor_for_type(cls, type_cls: type):
+    def register_editor_for_type(cls, type_cls: type, is_creatable=True):
         """[DECORATOR] Registers a decorated class as a TypeEditor for the given type-cls, in the TypeDatabase singleton.
 
         Thus, for example, this can be used as the following to register a string editor:
@@ -55,10 +69,11 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
 
         Args:
             type_cls (type): The value-type that the decorated Editor class can edit.
+            is_creatable (bool, optional): If this type, with the given editor class, will be creatable via editor. Defaults to True.
         """
         def decorator(editor_cls):
             db = cls()
-            db.add_type_editor(type_cls, editor_cls)
+            db.add_type_editor(type_cls, editor_cls, is_creatable)
             return editor_cls
         return decorator
 
@@ -82,7 +97,7 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
                     super().__init__(data)
                     self.color = color
             db = cls()
-            db.add_type_editor(type_cls, SpecificNoopEditor)
+            db.add_type_editor(type_cls, SpecificNoopEditor, False)
             return type_cls
         return decorator
 
@@ -120,10 +135,13 @@ class ImguiProperty(AdvProperty):
         """
         sig = inspect.signature(self.fget)
         cls = sig.return_annotation
-        if cls == sig.empty and obj is not None:
-            # Try getting type from property getter return value.
-            return type(self.fget(obj))
-        return cls
+        if cls == sig.empty:
+            if "value_type" in self.metadata:
+                return self.metadata["value_type"]
+            elif obj is not None:
+                # Try getting type from property getter return value.
+                return type(self.fget(obj))
+        return typing.get_origin(cls) or cls
 
     def get_value_editor(self, obj=None):
         """Gets the TypeEditor class used to edit this property value's type.
@@ -402,7 +420,7 @@ def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None,
     return imgui_property(flags=flags, options=options, docs=docs, option_flags=option_flags)
 
 
-@TypeDatabase.register_editor_for_type(Enum)
+@TypeDatabase.register_editor_for_type(Enum, False)
 class EnumEditor(TypeEditor):
     """Imgui TypeEditor for editing a ENUM value."""
 
