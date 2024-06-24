@@ -12,7 +12,6 @@ from nimbus.monitor.test_sensor import TestIHardware, TestIComputer
 from nimbus.utils.imgui.math import Vector2, multiple_lerp_with_weigths
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.nodes import PinKind, Node, input_property, output_property
-from nimbus.utils.imgui.actions import ActionFlow
 
 
 # Local implementation of classes wrapping C# types.
@@ -454,6 +453,7 @@ class Sensor(Node):
         self.node_header_color = Color(0.3, 0, 0, 0.6)
         self.node_bg_color = Color(0.2, 0.12, 0.12, 0.75)
         self.node_title = f"{self.hardware.full_name}\n{self.name} {self.type}"
+        from nimbus.utils.imgui.actions import ActionFlow
         self._on_update_pin = ActionFlow(self, PinKind.output, "On Update")
         self._on_update_pin.pin_tooltip = "Triggered when this Sensor is updated, getting a new value from the hardware."
         self._outputs.append(self._on_update_pin)

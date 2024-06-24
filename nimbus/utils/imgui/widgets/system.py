@@ -1,7 +1,7 @@
 import nimbus.utils.imgui.actions as actions
 from imgui_bundle import imgui
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
-from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind, output_property
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.widgets.base import BaseWidget, Slot, WidgetParentPin, draw_widget_pin_icon
 from nimbus.monitor.sensors import Sensor, Hardware, ComputerSystem
@@ -75,7 +75,7 @@ class SystemRootNode(Node):
         self.can_be_deleted = False
         self.create_data_pins_from_properties()
 
-    @actions.output_property(use_prop_value=True)
+    @output_property(use_prop_value=True)
     def delta_time(self) -> float:
         """Gets the delta time, in seconds, between the current and last frames from IMGUI."""
         io = imgui.get_io()

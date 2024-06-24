@@ -208,30 +208,42 @@ class Node:
         """Gets a list of all output pins of this node."""
         return self._outputs
 
-    def get_input_pin(self, name: str):
+    def get_input_pin(self, name: str, pin_type: type['NodePin'] | tuple['NodePin'] = None):
         """Gets our INPUT pin with the given name.
 
         Args:
             name (str): name to check for.
+            pin_type (type[NodePin] | tuple[NodePin], optional): Type of pins to search for. If this is given, only pins of these types will
+            be checked against ``name`` for returning. This is the same arg as passed to ``class_or_tuple`` in ``isinstance(obj, class_or_tuple)``:
+            it can be a single Type object to check against, or a tuple or union of types to check against several types. If this is None
+            (the default), will check all pins (same as passing pin_type as ``NodePin``).
 
         Returns:
             NodePin: The pin with the given name, or None if no pin exists.
         """
+        if pin_type is None:
+            pin_type = NodePin
         for pin in self._inputs:
-            if pin.pin_name == name:
+            if pin.pin_name == name and isinstance(pin, pin_type):
                 return pin
 
-    def get_output_pin(self, name: str):
+    def get_output_pin(self, name: str, pin_type: type['NodePin'] | tuple['NodePin'] = None):
         """Gets our OUTPUT pin with the given name.
 
         Args:
             name (str): name to check for.
+            pin_type (type[NodePin] | tuple[NodePin], optional): Type of pins to search for. If this is given, only pins of these types will
+            be checked against ``name`` for returning. This is the same arg as passed to ``class_or_tuple`` in ``isinstance(obj, class_or_tuple)``:
+            it can be a single Type object to check against, or a tuple or union of types to check against several types. If this is None
+            (the default), will check all pins (same as passing pin_type as ``NodePin``).
 
         Returns:
             NodePin: The pin with the given name, or None if no pin exists.
         """
+        if pin_type is None:
+            pin_type = NodePin
         for pin in self._outputs:
-            if pin.pin_name == name:
+            if pin.pin_name == name and isinstance(pin, pin_type):
                 return pin
 
     def get_all_links(self) -> list['NodeLink']:

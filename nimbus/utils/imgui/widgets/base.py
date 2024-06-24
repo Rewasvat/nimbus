@@ -1,11 +1,10 @@
 import click
 from typing import Iterator, TYPE_CHECKING
 from imgui_bundle import imgui, ImVec2
-import nimbus.utils.imgui.actions as actions
 from nimbus.utils.imgui.math import Vector2, Rectangle
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.general import not_user_creatable, menu_item
-from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind
+from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind, output_property
 import nimbus.utils.imgui.type_editor as types
 
 if TYPE_CHECKING:
@@ -90,8 +89,6 @@ class BaseWidget(Node):
     """Abstract Base Widget Class.
 
     Shouldn't be used on its own.
-
-    NOTE: this class automatically sets up ``__init__()`` in sub-classes to call the initializer of this class before.
     """
 
     def __init__(self):
@@ -167,7 +164,7 @@ class BaseWidget(Node):
         """The position of this widget's bottom-right corner. [GET]"""
         return self._pos + self._area
 
-    @actions.output_property()
+    @output_property()
     def this(self):
         """The widget itself (same as ``self``).
 
@@ -322,8 +319,6 @@ class LeafWidget(BaseWidget):
     """Abstract Base Leaf Widget.
 
     These are widgets that do not have any child widgets - they are the a leaf in the widget-system tree hierarchy.
-
-    NOTE: this class automatically sets up ``__init__()`` in sub-classes to call the initializer of this class before.
     """
 
 
@@ -527,8 +522,6 @@ class ContainerWidget(BaseWidget):
     Logically, a ContainerWidget is a collection of Slots. Each slot defines where and how to render a optional child widget.
     The container itself handles adding, removing, updating and rendering slots. Container widgets implementations thus mostly
     handle defining its slots, and how to update them.
-
-    NOTE: this class automatically sets up ``__init__()`` in sub-classes to call the initializer of this class before.
     """
 
     def __init__(self):

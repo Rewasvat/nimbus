@@ -1,7 +1,7 @@
 import click
 import traceback
 from imgui_bundle import imgui
-from nimbus.utils.imgui.nodes import Node, NodePin, PinKind, input_property, output_property
+from nimbus.utils.imgui.nodes import Node, NodePin, PinKind
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.math import Vector2
 from nimbus.utils.imgui.general import menu_item, not_user_creatable
@@ -101,10 +101,11 @@ class Action(Node):
     As such, actions define a system of generic logic execution akin to a node-based visual language.
     """
 
-    def __init__(self):
+    def __init__(self, include_default_flow_pins=True):
         super().__init__()
-        self._inputs.append(ActionFlow(self, PinKind.input, "Execute"))
-        self._outputs.append(ActionFlow(self, PinKind.output, "Trigger"))
+        if include_default_flow_pins:
+            self._inputs.append(ActionFlow(self, PinKind.input, "Execute"))
+            self._outputs.append(ActionFlow(self, PinKind.output, "Trigger"))
         self.create_data_pins_from_properties()
 
     def execute(self):
@@ -138,9 +139,9 @@ class Action(Node):
             name (str, optional): Name of the output flow pin to trigger. Defaults to "Trigger", which is Action's
             default output pin.
         """
-        for flow in [pin for pin in self._outputs if isinstance(pin, ActionFlow)]:
-            if flow.pin_name == name:
-                flow.trigger()
+        flow: ActionFlow = self.get_output_pin(name, ActionFlow)
+        if flow:
+            flow.trigger()
 
 
 class ActionColors:
@@ -166,22 +167,6 @@ class ActionColors:
     """Header color for special-related actions."""
 
 
-class Print(Action):
-    """Prints a value to the terminal."""
-
-    def __init__(self):
-        super().__init__()
-        self.node_header_color = ActionColors.Debug
-
-    @input_property()
-    def text(self) -> str:
-        """Text to print."""
-
-    def execute(self):
-        click.secho(self.text)
-        self.trigger_flow()
-
-
 # TODO: criar as várias actions que já precisaremos de inicio
 # TODO: ver se dá pra fazer um decorator que ao ser posto numa function, cria uma action que:
 #   - recebe os mesmos params da func como inputs da action
@@ -192,11 +177,3 @@ class Print(Action):
 #   - isso daria problema com save/load. Pro pickle funcionar, a classe precisa existir na raiz de algum módulo.
 #       - ai essas coisas que criam classes dinamicamente (dentro de uma função por exemplo) caga o pickle
 #       - pesquisar, talvez dê pra adaptar o save/load do pickle pra funcionar com classes dinamicas assim.
-# TODO: criar action que só tem um unico DataPin de output do tipo T. Nenhum flow. seria action de criar um valor estatico.
-#   - teria que criar uma derivada pra cada tipo (cada tipo no TypeDatabase que não seja Noop) parece bom
-#   - seria melhor se der pra gerar essas classes automaticamente num FOR or something.
-# NOTE: pra testar classes dinamicas que funcionam com o pickle:
-#   - FOR ou coisa do genero gerando classes dinamicamente
-#   - cria classe as usual, ou one-liner criando classe nova com type(nome, inherits, ...)  usa a classe base apropriada!
-#   - guarda a ref dessas classes numa lista se quiser pra fácil acesso de todas
-#   - guarda a ref de cada classe no contexto do modulo! Isso talvez faça ela ser pickable.
