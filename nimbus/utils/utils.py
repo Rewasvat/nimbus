@@ -287,6 +287,11 @@ class AdvProperty(property):
     """
 
     @property
+    def name(self) -> str:
+        """Gets the name of this property, as defined in its owner class."""
+        return self.fget.__name__
+
+    @property
     def metadata(self) -> dict[str, any]:
         """Gets the metadata dict of this property."""
         return getattr(self, "cls_metadata", {})

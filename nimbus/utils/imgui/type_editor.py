@@ -181,11 +181,10 @@ class ImguiProperty(AdvProperty):
             bool: If the property's value was changed.
         """
         editor = self.get_editor(obj)
-        name = self.fget.__name__
         if editor:
-            return editor.render_property(obj, name)
+            return editor.render_property(obj, self.name)
         # Failsafe if no editor for our type exists
-        imgui.text_colored(Colors.red, f"{type(obj).__name__} property '{name}': No TypeEditor exists for type '{self.get_value_type(obj)}'")
+        imgui.text_colored(Colors.red, f"{type(obj).__name__} property '{self.name}': No TypeEditor exists for type '{self.get_value_type(obj)}'")
         return False
 
 

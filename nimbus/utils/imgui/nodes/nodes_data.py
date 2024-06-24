@@ -201,11 +201,6 @@ class NodeDataProperty(types.ImguiProperty):
     """
 
     @property
-    def name(self) -> str:
-        """Gets the name of this property, as defined in its owner class."""
-        return self.fget.__name__
-
-    @property
     def pin_kind(self) -> PinKind:
         """Gets the pin kind of this property."""
         return self.metadata.get("pin_kind", PinKind.input)
