@@ -97,9 +97,9 @@ class TextMixin:
             text_rect = self._update_line_rects(line_rects, actual_scale)
 
             draw_list = imgui.get_window_draw_list()
-            draw_list.add_rect(text_rect.position, text_rect.bottom_right_pos, Colors.green.u32)
+            # draw_list.add_rect(text_rect.position, text_rect.bottom_right_pos, Colors.green.u32)
             for line, line_rect in zip(lines, line_rects):
-                draw_list.add_rect(line_rect.position, line_rect.bottom_right_pos, Colors.red.u32)
+                # draw_list.add_rect(line_rect.position, line_rect.bottom_right_pos, Colors.red.u32)
                 draw_list.add_text(
                     font=font,
                     font_size=font_height*actual_scale,

@@ -428,9 +428,8 @@ class NodePin:
 
     def __init__(self, parent: Node, kind: PinKind, name: str):
         self.parent_node: Node = parent
-        # TODO: talvez tenhamos que atualizar a associacao do pin_name->id se pin name trocar
         self.pin_name = name
-        self.pin_id = imgui_node_editor.PinId(nodes_id_generator().create(f"node{parent.node_id.id()}_pin_{name}"))
+        self.pin_id = imgui_node_editor.PinId(nodes_id_generator().create())
         self.pin_kind = kind
         self._links: dict[NodePin, NodeLink] = {}
         """Dict of all links this pin have. Keys are the opposite pins, which along with us forms the link."""
@@ -442,6 +441,12 @@ class NodePin:
         """If this object can be deleted by user-interaction."""
         self.pin_tooltip: str = None
         """Tooltip text to display when this pin is hovered by the user. If none, no tooltip will be displayed."""
+        self.prettify_name = False
+        """If the pin's name should be prettified when drawing it.
+
+        When true, some characters in the name (such as ``_``) are replaced by spaces, and all words are capitalized.
+        This DOES NOT change our ``self.pin_name`` attribute. It merely changes how the pin_name is drawn.
+        """
 
     def draw_node_pin(self):
         """Draws this pin. This should be used inside a node drawing context.
@@ -450,11 +455,16 @@ class NodePin:
         """
         imgui_node_editor.begin_pin(self.pin_id, self.pin_kind)
         imgui.begin_horizontal(f"{repr(self)}NodePin")
+        name = self.pin_name
+        if self.prettify_name:
+            name = " ".join(s.capitalize() for s in name.split("_"))
+
         if self.pin_kind == PinKind.output:
-            imgui.text_unformatted(self.pin_name)
+            imgui.text_unformatted(name)
         self.draw_node_pin_contents()
         if self.pin_kind == PinKind.input:
-            imgui.text_unformatted(self.pin_name)
+            imgui.text_unformatted(name)
+
         imgui.end_horizontal()
         if self.pin_tooltip:
             imgui_node_editor.suspend()

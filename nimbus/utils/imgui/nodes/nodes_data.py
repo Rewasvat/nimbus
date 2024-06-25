@@ -22,6 +22,7 @@ class DataPin(NodePin):
 
     def __init__(self, parent: Node, kind: PinKind, name: str, value_type: type, initial_value=None):
         super().__init__(parent, kind, name)
+        self.prettify_name = True
         self.value = initial_value
         """Value set in this pin. This is the user-configurable value (in the node editor), which is usually the default value of the pin.
 
