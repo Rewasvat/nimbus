@@ -1,3 +1,4 @@
+import types
 import typing
 import inspect
 import nimbus.utils.command_utils as cmd_utils
@@ -220,7 +221,6 @@ def imgui_property(**kwargs):
 
 
 # Other colors:
-#   int: cyan
 #   object/table: blue
 #   array: yellow   ==>used on Enum
 #   generic: (0.2, 0.2, 0.6, 1)  ==>used as default color in TypeEditor
@@ -271,9 +271,12 @@ class TypeEditor:
         """If true, this will add ``self.attr_doc`` as a tooltip for the last imgui control drawn."""
         self.color: Color = Color(0.2, 0.2, 0.6, 1)
         """Color of this type. Mostly used by DataPins of this type in Node Systems."""
-        self.can_accept_any_input = False
-        """If this type, when used as a Input DataPin in Node Systems, can accept a value from any other type
-        as its input value. Useful for types that can accept (or convert) any value to its type.
+        self.extra_accepted_input_types: type | tuple[type] | types.UnionType = None
+        """Extra types that this editor, when used as a Input DataPin in Node Systems, can accept as value.
+        Useful for types that can accept (or convert) other values to its type.
+
+        These extra types can be defined the same way as the ``class_or_tuple`` param for ``issubclass(type, class_or_tuple)``.
+        Which means, it can be a single type, a UnionType (``A | B``) or a tuple of types.
 
         This is usually used together with ``self.convert_value_to_type`` to ensure the input value is converted
         to this type.
@@ -368,7 +371,16 @@ class TypeEditor:
             _type_: _description_
         """
         if self.convert_value_to_type and self.value_type and not isinstance(value, self.value_type):
-            value = self.value_type(value)
+            try:
+                value = self.value_type(value)
+            except TypeError:
+                if value is None:
+                    # Common type conversion can fail if value=None. So just try to generate a default value.
+                    # Most basic types in python (int, float, str, bool...) follow this behavior.
+                    value = self.value_type()
+                else:
+                    # If conversion failed and type wasn't None, then we have a real error on our hands. Re-raise the exception to see it.
+                    raise
         return value
 
 
@@ -386,7 +398,7 @@ class StringEditor(TypeEditor):
         self.add_tooltip_after_value = self.options is None
         self.multiline: bool = data.get("multiline", False)
         self.color = Colors.magenta
-        self.can_accept_any_input = True
+        self.extra_accepted_input_types = object
         self.convert_value_to_type = True
 
     def draw_value_editor(self, value: str) -> tuple[bool, str]:
@@ -452,7 +464,7 @@ class BoolEditor(TypeEditor):
     def __init__(self, data: dict):
         super().__init__(data)
         self.color = Colors.red
-        self.can_accept_any_input = True
+        self.extra_accepted_input_types = object
         self.convert_value_to_type = True
 
     def draw_value_editor(self, value: bool):
@@ -469,7 +481,7 @@ def bool_property():
 
 @TypeDatabase.register_editor_for_type(float)
 class FloatEditor(TypeEditor):
-    """Imgui TypeEditor for editing a BOOLEAN value."""
+    """Imgui TypeEditor for editing a FLOAT value."""
 
     def __init__(self, data: dict):
         """
@@ -500,6 +512,8 @@ class FloatEditor(TypeEditor):
         self.flags: imgui.SliderFlags_ = data.get("flags", 0)
         """Slider flags to use in imgui's float control."""
         self.color = Colors.green
+        self.convert_value_to_type = True
+        self.extra_accepted_input_types = int
 
     def draw_value_editor(self, value: float):
         if value is None:
@@ -524,6 +538,69 @@ def float_property(min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, 
         is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
         MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
+    """
+    return imgui_property(min=min, max=max, format=format, speed=speed, is_slider=is_slider, flags=flags)
+
+
+@TypeDatabase.register_editor_for_type(int)
+class IntEditor(TypeEditor):
+    """Imgui TypeEditor for editing a INTEGER value."""
+
+    def __init__(self, data: dict):
+        """
+        Args:
+            min (int, optional): Minimum allowed value for this int property. Defaults to 0.
+            max (int, optional): Maximum allowed value for this int property. Defaults to 0. If MIN >= MAX then we have no bounds.
+            format (str, optional): Text format of the value to decorate the control with. Defaults to "%d". Apparently this needs to be a valid
+            python format, otherwise the int control wont work properly.
+            speed (float, optional): Speed to apply when changing values. Only applies when dragging the value and IS_SLIDER=False. Defaults to 1.0.
+            is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
+            MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
+            flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag int controls. Defaults to imgui.SliderFlags_.none.
+        """
+        super().__init__(data)
+        self.is_slider: bool = data.get("is_slider", False)
+        """If the int control will be a slider to easily choose between the min/max values. Otherwise the int control will
+        be a drag-int."""
+        self.speed: float = data.get("speed", 1.0)
+        """Speed of value change when dragging the control's value. Only applies when using drag-controls (is_slider=False)"""
+        self.min: int = data.get("min", 0)
+        """Minimum value allowed. For proper automatic bounds in the control, ``max`` should also be defined, and be bigger than this minimum.
+        Also use the ``always_clamp`` slider flags."""
+        self.max: int = data.get("max", 0)
+        """Maximum value allowed. For proper automatic bounds in the control, ``min`` should also be defined, and be lesser than this maximum.
+        Also use the ``always_clamp`` slider flags."""
+        self.format: str = data.get("format", "%d")
+        """Format to use to convert value to display as text in the control (use python int format, such as ``%d``)"""
+        self.flags: imgui.SliderFlags_ = data.get("flags", 0)
+        """Slider flags to use in imgui's int control."""
+        self.color = Colors.cyan
+        self.convert_value_to_type = True
+        self.extra_accepted_input_types = float
+
+    def draw_value_editor(self, value: int):
+        if value is None:
+            value = 0
+        if self.is_slider:
+            return imgui.slider_int("##value", value, self.min, self.max, self.format, self.flags)
+        else:
+            return imgui.drag_int("##value", value, self.speed, self.min, self.max, self.format, self.flags)
+
+
+def int_property(min=0, max=0, format="%d", speed=1, is_slider=False, flags: imgui.SliderFlags_ = 0):
+    """Imgui Property attribute for a INTEGER type.
+
+    Behaves the same way as a property, but includes a IntEditor object for allowing changing this int's value in imgui.
+
+    Args:
+        min (int, optional): Minimum allowed value for this int property. Defaults to 0.
+        max (int, optional): Maximum allowed value for this int property. Defaults to 0. If MIN >= MAX then we have no bounds.
+        format (str, optional): Text format of the value to decorate the control with. Defaults to "%d". Apparently this needs to be a valid
+        python format, otherwise the int control wont work properly.
+        speed (float, optional): Speed to apply when changing values. Only applies when dragging the value and IS_SLIDER=False. Defaults to 1.
+        is_slider (bool, optional): If we'll use a SLIDER control for editing. It contains a marker indicating the value along the range between
+        MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
+        flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag int controls. Defaults to imgui.SliderFlags_.none.
     """
     return imgui_property(min=min, max=max, format=format, speed=speed, is_slider=is_slider, flags=flags)
 

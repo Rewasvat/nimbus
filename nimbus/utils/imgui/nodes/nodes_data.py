@@ -64,12 +64,24 @@ class DataPin(NodePin):
         imgui.dummy((size, size))
 
     @property
-    def accepts_any_as_input(self) -> bool:
-        """If this Input DataPin can accept links to any other DataPin, regardless of their value-type.
+    def accepted_input_types(self) -> type | types.types.UnionType | tuple[type]:
+        """The types this Input DataPin can accept as links, either as a single type object, a union of types, or
+        as a tuple of types. If a link being connected to this input pin is of a type (the output type) that is a subclass
+        of one of these accepted input types, then the connection will be accepted.
 
-        This only applies to input pins. Usually for types that can receive any kind of value, since they can
-        convert any value to their value-type (such as strings or booleans)."""
-        return self._editor and self._editor.can_accept_any_input
+        By default, accepted input types always contain our ``self.value_type``. Depending on our TypeEditor's
+        ``extra_accepted_input_types``, there will be extra types and this might return a type-union or a tuple of types.
+
+        This only applies to input pins. Usually for pins of types that can receive values from other types and convert
+        them to their type (such as strings and booleans, or ints/floats between themselves)."""
+        if self._editor:
+            extra_types = self._editor.extra_accepted_input_types
+            if extra_types is not None:
+                if isinstance(extra_types, tuple):
+                    return tuple([self.value_type] + list(extra_types))
+                else:
+                    return self.value_type | extra_types
+        return self.value_type
 
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
@@ -80,10 +92,10 @@ class DataPin(NodePin):
         # Type Check: output-pin type must be same or subclass of input-pin type
         if self.pin_kind == PinKind.input:
             out_type = pin.value_type
-            in_type = self.value_type if not self.accepts_any_as_input else object
+            in_type = self.accepted_input_types
         else:
             out_type = self.value_type
-            in_type = pin.value_type if not pin.accepts_any_as_input else object
+            in_type = pin.accepted_input_types
         if not issubclass(out_type, in_type):
             return False, f"Can't pass '{out_type}' to '{in_type}'"
         # Logic in on_new_link_added ensures we only have 1 link, if we're a input pin.
@@ -103,8 +115,8 @@ class DataPin(NodePin):
         elif self.is_linked_to_any():
             link = self.get_all_links()[0]
             value = link.start_pin.get_value()
-            if self._editor and self._editor.convert_value_to_type:
-                value = self.value_type(value)
+            if self._editor:
+                value = self._editor._check_value_type(value)
             return value
         else:
             return self.value  # the input pin's default value
