@@ -328,3 +328,56 @@ def get_all_properties(cls: type, prop_type=property) -> dict[str, property]:
     for kls in reversed(cls.mro()):
         props.update({key: value for key, value in kls.__dict__.items() if isinstance(value, prop_type)})
     return props
+
+
+class EventDispatcher[T: callable]:
+    """Simple Observer pattern implementation.
+
+    This class allows several listener callables to be registered, and execute them all when required.
+    """
+
+    def __init__(self):
+        self.listeners: list[T] = []
+
+    def __call__(self, *args, **kwargs):
+        """Executes all registered listeners to this dispatcher."""
+        for listener in self.listeners:
+            listener(*args, **kwargs)
+
+    def __add__(self, other: T):
+        """Shortcut to add a listener to this dispatcher."""
+        self.add_listener(other)
+        return self
+
+    def __sub__(self, other: T):
+        """Shortcut to remove a listener from this dispatcher."""
+        self.remove_listener(other)
+        return self
+
+    def add_listener(self, func: T):
+        """Adds a new listener callback to this dispatcher.
+
+        Listeners are executed in order when this dispatcher is executed.
+        This does nothing if ``func`` is already a listener of this dispatcher.
+
+        Args:
+            func (T): listener callable to add.
+
+        Raises:
+            ValueError: if ``func`` is not a callable.
+        """
+        if not callable(func):
+            raise ValueError(f"Object '{func}' not a callable - can't add as listener to '{self}'")
+        if func not in self.listeners:
+            self.listeners.append(func)
+
+    def remove_listener(self, func: T):
+        """Removes the given listener from this dispatcher.
+
+        This does nothing if ``func`` is not a listener of this dispatcher.
+
+        Args:
+            func (T): callable to remove as listener of this dispatcher.
+        """
+        if func in self.listeners:
+            self.listeners.remove(func)
