@@ -144,6 +144,24 @@ class ImguiProperty(AdvProperty):
                 return type(self.fget(obj))
         return typing.get_origin(cls) or cls
 
+    def get_value_subtypes(self) -> tuple[type, ...]:
+        """Gets the subtypes of this property (the subtypes of its value-type).
+
+        Types that act as containers of objects (such as lists, dicts and so on) can define the types they contain - these are the subtypes.
+        Consider the following examples for the property's type:
+        * ``list[str]``: the ``list`` type is the property's base type, the one returned by ``self.get_value_type()``. But ``str`` is its subtype,
+        the expected type of objects the list will contain.
+        * Same goes for ``dict[int, float]``: dict is the base type, ``(int, float)`` will be the subtypes.
+
+        Returns:
+            tuple[type, ...]: a tuple of subtypes. This tuple will be empty if there are no subtypes.
+        """
+        sig = inspect.signature(self.fget)
+        cls = sig.return_annotation
+        if cls == sig.empty:
+            return tuple()
+        return typing.get_args(cls)
+
     def get_value_editor(self, obj=None):
         """Gets the TypeEditor class used to edit this property value's type.
 
@@ -158,6 +176,22 @@ class ImguiProperty(AdvProperty):
         """
         database = TypeDatabase()
         return database.get_editor_type(self.get_value_type(obj))
+
+    def get_editor_data(self, obj):
+        """Gets the TypeEditor data dict used to initialize editors for this property, for
+        the given object (property owner).
+
+        Args:
+            obj (any): a object of the class that owns this property.
+
+        Returns:
+            dict: the data dict to pass to a TypeEditor's constructor.
+        """
+        data = self.metadata.copy()
+        if "doc" not in data:
+            data["doc"] = self.__doc__
+        data["value_type"] = self.get_value_type(obj)
+        return data
 
     def get_editor(self, obj):
         """Gets the TypeEditor instance for the given object, for editing this property's value.
@@ -178,10 +212,7 @@ class ImguiProperty(AdvProperty):
         editor: TypeEditor = self.editors.get(obj, None)
         editor_cls = self.get_value_editor(obj)
         if editor is None and editor_cls is not None:
-            data = self.metadata.copy()
-            if "doc" not in data:
-                data["doc"] = self.__doc__
-            data["value_type"] = self.get_value_type(obj)
+            data = self.get_editor_data(obj)
             editor = editor_cls(data)
             self.editors[obj] = editor
         return editor
