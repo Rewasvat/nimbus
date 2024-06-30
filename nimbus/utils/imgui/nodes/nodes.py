@@ -246,6 +246,37 @@ class Node:
             if pin.pin_name == name and isinstance(pin, pin_type):
                 return pin
 
+    def add_pin(self, pin: 'NodePin', index: int = None, before: 'NodePin' = None):
+        """Adds the given pin to this node's list of pin of that kind.
+
+        Args:
+            pin (NodePin): pin to add to this node.
+            index (int, optional): Optional index at which to insert the pin. If None the pin will just be appended to the list's end.
+            before (NodePin, optional): Optional pre-existing pin to use as index. If this is given, the given ``pin`` will be inserted
+            just before this pin. Will raise ``ValueError`` if ``before`` is not a pin of this node, with the same kind as the given ``pin``.
+        """
+        pin_list = self._inputs if pin.pin_kind == PinKind.input else self._outputs
+        if index is not None:
+            pin_list.insert(index, pin)
+        elif before is not None:
+            self.add_pin(pin, index=pin_list.index(before))
+        else:
+            pin_list.append(pin)
+
+    def remove_pin(self, pin: 'NodePin'):
+        """Removes the given pin from this node's list of pins for the same pin kind.
+
+        This only removes the pin from this Node, it does nothing else. It'll raise ``ValueError`` if the pin does
+        not belong in this node. For the proper full deletion/removal of a pin, use ``pin.delete()``.
+
+        Args:
+            pin (NodePin): the pin to remove from this node.
+        """
+        if pin.pin_kind == PinKind.input:
+            self._inputs.remove(pin)
+        else:
+            self._outputs.remove(pin)
+
     def get_all_links(self) -> list['NodeLink']:
         """Gets all links to/from this node."""
         links = []
@@ -654,8 +685,7 @@ class NodePin:
         Implementations should override this to have their logic for deleting the pin and removing it from its parent node.
         Default recycles this pin's ID.
         """
-        # Imgui Node Editor automatically schedules for removal links connected to a deleted pin.
-        # That will call link.delete() which will recycle it, so no need to manually delete links here.
+        self.delete_all_links()
         nodes_id_generator().recycle(self.pin_id.id())
 
     def __getstate__(self):

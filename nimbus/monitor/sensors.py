@@ -456,7 +456,7 @@ class Sensor(Node):
         from nimbus.utils.imgui.actions import ActionFlow
         self._on_update_pin = ActionFlow(self, PinKind.output, "On Update")
         self._on_update_pin.pin_tooltip = "Triggered when this Sensor is updated, getting a new value from the hardware."
-        self._outputs.append(self._on_update_pin)
+        self.add_pin(self._on_update_pin)
         self.create_data_pins_from_properties()
 
     @property  # TODO: deixar setar via input-pin?

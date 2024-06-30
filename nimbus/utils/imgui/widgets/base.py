@@ -110,7 +110,7 @@ class BaseWidget(Node):
         self.enabled = True
         """If this widget is enabled. Disabled widgets are not rendered by their parents."""
         self.parent_pin = WidgetParentPin(self)
-        self._inputs.append(self.parent_pin)
+        self.add_pin(self.parent_pin)
         self.node_title = None  # we want to use the str(self) default
         self.create_data_pins_from_properties()
 

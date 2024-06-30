@@ -22,7 +22,7 @@ class Branch(LogicAction):
         default_trigger.pin_tooltip = "Triggered when the condition is True (truthy)."
         false_trigger = ActionFlow(self, PinKind.output, "False")
         false_trigger.pin_tooltip = "Triggered when the condition is False (falsy)."
-        self._outputs.append(false_trigger)
+        self.add_pin(false_trigger)
 
     @input_property()
     def condition(self) -> bool:
@@ -49,7 +49,7 @@ class ForRangeLoop(LogicAction):
         default_trigger.pin_tooltip = "Triggered on each loop iteration."
         finish_trigger = ActionFlow(self, PinKind.output, "Finished")
         finish_trigger.pin_tooltip = "Triggered when the loop ends"
-        self._outputs.append(finish_trigger)
+        self.add_pin(finish_trigger)
 
     @input_property()
     def start(self) -> int:

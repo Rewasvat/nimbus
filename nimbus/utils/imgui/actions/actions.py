@@ -104,8 +104,8 @@ class Action(Node):
     def __init__(self, include_default_flow_pins=True):
         super().__init__()
         if include_default_flow_pins:
-            self._inputs.append(ActionFlow(self, PinKind.input, "Execute"))
-            self._outputs.append(ActionFlow(self, PinKind.output, "Trigger"))
+            self.add_pin(ActionFlow(self, PinKind.input, "Execute"))
+            self.add_pin(ActionFlow(self, PinKind.output, "Trigger"))
         self.create_data_pins_from_properties()
 
     def execute(self):

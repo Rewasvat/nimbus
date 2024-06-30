@@ -18,7 +18,7 @@ class Button(RectMixin, TextMixin, LeafWidget):
         TextMixin.__init__(self)
         self.node_header_color = WidgetColors.Interactible
         self._on_clicked = actions.ActionFlow(self, nodes.PinKind.output, "On Click")
-        self._outputs.append(self._on_clicked)
+        self.add_pin(self._on_clicked)
 
     def render(self):
         self._draw_rect()

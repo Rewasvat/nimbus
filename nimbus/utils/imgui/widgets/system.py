@@ -67,8 +67,8 @@ class SystemRootNode(Node):
         self.system: WidgetSystem = system
         self.widget_root = SystemRootPin(self)
         self.on_update = actions.ActionFlow(self, PinKind.output, "On Update")
-        self._outputs.append(self.widget_root)
-        self._outputs.append(self.on_update)
+        self.add_pin(self.widget_root)
+        self.add_pin(self.on_update)
         self.node_title = str(system)
         self.node_bg_color = Color(0.12, 0.22, 0.1, 0.75)
         self.node_header_color = Color(0.32, 0.6, 0.04, 0.6)
