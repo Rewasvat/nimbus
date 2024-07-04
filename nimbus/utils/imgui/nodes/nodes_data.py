@@ -4,6 +4,7 @@ from nimbus.utils.utils import get_all_properties
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind
 from nimbus.utils.imgui.colors import Colors
 from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.general import menu_item
 
 
 class DataPinState:
@@ -272,7 +273,8 @@ class NodeDataProperty(types.ImguiProperty):
     @property
     def pin_class(self) -> type[DataPin]:
         """Gets the DataPin class to use as pin for this property."""
-        return self.metadata.get("pin_class", DataPin)
+        default_pin_class = DynamicAddInputPin if self.dynamic_input_pins else DataPin
+        return self.metadata.get("pin_class", default_pin_class)
 
     @property
     def use_prop_value(self) -> bool:
@@ -284,6 +286,18 @@ class NodeDataProperty(types.ImguiProperty):
         This is mostly intended for output pins, so that whoever uses it gets the pin's value directly from the property's getter function.
         That way the node doesn't need to directly set the output value (assuming the getter is capable of getting the value itself)."""
         return self.metadata.get("use_prop_value", False)
+
+    @property
+    def dynamic_input_pins(self) -> bool:
+        """If the default class of pins created by this property should be the ``DynamicAddInputPin`` instead of the
+        regular ``DataPin``.
+
+        The DynamicAddInputPin is intended for container types on input-properties (for example, a ``list[str]``).
+        Instead of representing the property's type (a ``list``, in this example), it'll represent the subtype (the ``str``).
+        However, when linked to another pin, it'll create a new input pin of the subtype in the node, and connect the link to that
+        pin instead. Thus, it allows the node to have multiple dynamic pins as the itens for a input list.
+        """
+        return self.metadata.get("dynamic_input_pins", False)
 
     @property
     def data_pins(self) -> dict[Node, DataPin]:
@@ -449,3 +463,121 @@ class DataPropertyState(DataPinState):
         if self.editor and self._property:
             self._property.editors[parent_node] = self.editor
 
+
+class DynamicAddInputPin(DataPin):
+    """Specialized DataPin intended for use in NodeDataProperties that hold a list of values.
+
+    This pin receives a DataPropertyState on construction, but internally updates it to create its DynamicInputState.
+
+    This pin should represent a ``list[T]``. The pin itself, when connected to, will spawn a new pin in the same node,
+    and connect the link to that new pin instead. Thus, each of these "sub-pins" represents an item in the list, which
+    is represented by this "parent" pin. The NodeDataProperty, when accessed, will retrieve the full list, with the value
+    of each sub-pin.
+    """
+
+    def __init__(self, parent: Node, state: DataPropertyState):
+        state = DynamicInputState(state.property)
+        super().__init__(parent, state)
+        self._sub_pins: list[DynamicInputSubPinState] = []
+
+    def draw_node_pin_contents(self):
+        draw = imgui.get_window_draw_list()
+        size = imgui.get_text_line_height()
+        pos = Vector2.from_cursor_screen_pos() + (size * 0.2, size * 0.2)
+        piece = (size * 0.6) / 3
+        vert_top_left = pos + (piece, 0)
+        vert_bottom_right = pos + (piece * 2, piece * 3)
+        hori_top_left = pos + (0, piece)
+        hori_bottom_left = pos + (piece * 3, piece * 2)
+        draw.add_rect_filled(vert_top_left, vert_bottom_right, self.default_link_color.u32)
+        draw.add_rect_filled(hori_top_left, hori_bottom_left, self.default_link_color.u32)
+        imgui.dummy((size, size))
+
+    def render_edit_details(self):
+        if menu_item("Add New Pin"):
+            self.create_sub_pin()
+        imgui.set_item_tooltip("Adds a new sub-pin to the node. A new item in this list.")
+
+    def on_new_link_added(self, link: NodeLink):
+        new_pin = self.create_sub_pin()
+        link.delete()
+        # Deleting/Creating new link to ensure all 3 pins involved are properly updated with the actual link.
+        new_pin.link_to(link.start_pin)
+
+    def create_sub_pin(self) -> DataPin:
+        """Creates a new "sub pin".
+
+        Returns:
+            DataPin: _description_
+        """
+        state = DynamicInputSubPinState(self.state)
+        self._sub_pins.append(state)
+
+        pin = DataPin(self.parent_node, state)
+        pin.can_be_deleted = self.pin_kind == PinKind.input
+        self.parent_node.add_pin(pin, before=self)
+        return pin
+
+
+class DynamicInputState(DataPropertyState):
+    """Specialized state used by ``DynamicAddInputPin`` (DAI-Pin).
+
+    As such, this is to be used by a (preferably input) NodeDataProperty of a ``list[T]`` type.
+    This state (and its "parent" DynamicAddInputPin) represents the origin ``list`` type and value.
+    However, this state indicates its type as T instead, allowing the DAI-Pin to be linked to the values the
+    list will hold, and thus create the subpins for them.
+    """
+
+    def __init__(self, prop: NodeDataProperty):
+        super().__init__(prop)
+        self.parent_pin: DynamicAddInputPin = None
+
+    def get(self):
+        return [substate.parent_pin.get_value() for substate in self.parent_pin._sub_pins]
+
+    def correct_value(self, value):
+        # TODO: this is kind of a workaround. We represent what should be a list-like value. But our type()
+        #   returns the internal type, so our editor would try to fix the value-type to the wrong type and crash.
+        return self.get()
+
+    def set(self, value):
+        # TODO: setar lista direto:
+        #   - pra pins/substates que já existe, seta valor deles pra cada item
+        #   - se faltar substates, cria eles (e seus pins)
+        #   - se tá sobrando substate, deleta eles (e seus pins)
+        super().set(value)
+
+    def type(self):
+        return self.subtypes()[0]
+
+
+class DynamicInputSubPinState(DataPinState):
+    """Specialized state used by DataPins dynamically created as sub-pins by a ``DynamicAddInputPin``.
+
+    Represented type is the first subtype of the "parent" DAI-Pin (The ``T`` in ``list[T]``)."""
+
+    def __init__(self, owner: DynamicInputState):
+        name = f"{owner.name} #{len(owner.parent_pin._sub_pins)+1}"
+        self.owner = owner
+        super().__init__(name, owner.kind, owner.tooltip)
+        editor_data = owner.property.get_editor_data(owner.parent_node)
+        self.setup_editor(data=editor_data)
+
+    @property
+    def index(self):
+        """The index of this state in our parent DynamicAddInputPin list of sub-pins."""
+        return self.owner.parent_pin._sub_pins.index(self)
+
+    def type(self) -> type:
+        return self.owner.subtypes()[0]
+
+    def delete(self):
+        self.owner.parent_pin._sub_pins.remove(self)
+        for substate in self.owner.parent_pin._sub_pins:
+            substate.update_name()
+        return super().delete()
+
+    def update_name(self):
+        """Updates the name of this state (and its pin) according to our current index."""
+        self.name = f"{self.owner.name} #{self.index + 1}"
+        self.parent_pin.pin_name = self.name
