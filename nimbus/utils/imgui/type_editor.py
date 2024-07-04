@@ -436,12 +436,13 @@ class StringEditor(TypeEditor):
         if self.options is None:
             if value is None:
                 value = ""
-            if self.multiline:
-                num_lines = value.count("\n") + 1
+            num_lines = value.count("\n") + 1
+            if self.multiline or num_lines > 1:
                 size = (0, num_lines * imgui.get_text_line_height_with_spacing())
-                return imgui.input_text_multiline("##", value, size, flags=self.flags)
+                changed, new_value = imgui.input_text_multiline("##", value, size, flags=self.flags)
             else:
-                return imgui.input_text("##", value, flags=self.flags)
+                changed, new_value = imgui.input_text("##", value, flags=self.flags)
+            return changed, new_value.replace("\\n", "\n")
         else:
             return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, flags=self.option_flags)
 
