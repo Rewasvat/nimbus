@@ -1,5 +1,6 @@
+import re
 from nimbus.utils.imgui.actions.actions import Action, ActionColors
-from nimbus.utils.imgui.nodes import input_property, output_property, DataPin
+from nimbus.utils.imgui.nodes import input_property, output_property, DataPin, DataPinState, PinKind
 from nimbus.utils.imgui.general import not_user_creatable
 
 
@@ -12,6 +13,7 @@ class Operation(Action):
         self.node_header_color = ActionColors.Operations
 
 
+# TODO: suportar floats, ints, Vector2 ou Rects. De preferencia sem fazer actions diferentes pra cada tipo (investigar uso de union types)
 class Sum(Operation):
     """Sum values together."""
 
@@ -25,6 +27,10 @@ class Sum(Operation):
         """The result of the sum of our input values"""
         return sum(self.values, 0.0)
 
+
+# TODO: subtraction action
+# TODO: multiply action
+# TODO: division action
 
 class Concatenate(Operation):
     """Concatenate various strings together.
@@ -46,3 +52,73 @@ class Concatenate(Operation):
     def result(self) -> str:
         """The concatenated string."""
         return self.separator.join(self.strings)
+
+
+class FormatString(Operation):
+    """Formats a string with given input values."""
+
+    def __init__(self):
+        self._subpins: dict[str, DataPin] = {}
+        super().__init__()
+
+    @input_property()
+    def base(self) -> str:
+        """Base format string.
+
+        Any ``{name}`` tags in this string will become input pins to allow the node to receive the
+        value for the ``name`` variable.
+        """
+
+    @base.setter
+    def base(self, value: str):
+        new_keys = set(self.get_base_keys(value))
+        cur_keys = set(self._subpins.keys())
+        missing = new_keys - cur_keys
+        for name in missing:
+            self.create_subpin(name)
+        removed = cur_keys - new_keys
+        for name in removed:
+            pin = self._subpins.pop(name)
+            pin.delete()
+
+    @output_property(use_prop_value=True)
+    def result(self) -> str:
+        """The formatted string."""
+        try:
+            return self.base.format(**self.get_format_args())
+        except ValueError:
+            return self.base + "\n<!INVALID FORMAT!>"
+        except IndexError:
+            return self.base + "\n<!UNSUPPORTED POSITIONAL ARG!>"
+
+    def get_format_args(self) -> dict[str, str]:
+        """Gets the values for all args for our ``self.base`` format string from our subpins for each arg.
+
+        Returns:
+            dict[str, str]: a dict of {arg key -> value} to use to format our self.base string.
+        """
+        return {key: pin.get_value() for key, pin in self._subpins.items()}
+
+    def get_base_keys(self, value: str = None) -> list[str]:
+        """Gets a list of keys from ``{key}`` tags in a format string.
+
+        Args:
+            value (str, optional): A format string to check. Defaults to None, in which case we'll use our ``self.base`` string.
+
+        Returns:
+            list[str]: list of keys
+        """
+        return re.findall(r"[{]([^:}]+)[^}]*[}]", value or self.base)
+
+    def create_subpin(self, name: str):
+        """Creates a new string input sub-pin in this node with the given name.
+        These subpins are meant to represent the args the user has defined in the ``self.base`` format string.
+
+        Args:
+            name (str): sub-pin name.
+        """
+        tooltip = f"Input value for the '{name}' tag in the BASE format string."
+        state = DataPinState(name, PinKind.input, tooltip, str)
+        pin = DataPin(self, state)
+        self.add_pin(pin)
+        self._subpins[name] = pin

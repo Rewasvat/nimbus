@@ -4,4 +4,5 @@
 
 from nimbus.utils.imgui.nodes.nodes import Node, NodePin, NodeLink, PinKind
 from nimbus.utils.imgui.nodes.editor import NodeEditor
-from nimbus.utils.imgui.nodes.nodes_data import input_property, output_property, DataPin, NodeDataProperty, create_data_pins_from_properties
+from nimbus.utils.imgui.nodes.nodes_data import DataPin, DataPinState
+from nimbus.utils.imgui.nodes.nodes_data import input_property, output_property, NodeDataProperty, create_data_pins_from_properties

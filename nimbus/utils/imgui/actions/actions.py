@@ -167,7 +167,6 @@ class ActionColors:
     """Header color for special-related actions."""
 
 
-# TODO: criar as várias actions que já precisaremos de inicio
 # TODO: ver se dá pra fazer um decorator que ao ser posto numa function, cria uma action que:
 #   - recebe os mesmos params da func como inputs da action
 #      - principalmente, ver se isso funcionaria com métodos de classes, onde o `self` seria um input a receber tb.
@@ -177,3 +176,6 @@ class ActionColors:
 #   - isso daria problema com save/load. Pro pickle funcionar, a classe precisa existir na raiz de algum módulo.
 #       - ai essas coisas que criam classes dinamicamente (dentro de uma função por exemplo) caga o pickle
 #       - pesquisar, talvez dê pra adaptar o save/load do pickle pra funcionar com classes dinamicas assim.
+# TODO: sistema pra user poder criar grafos como quiser, salvar, e reusar eles como um node "Run Graph" anywhere.
+#   - poder fazer isso pra qualquer coisa: hierarquia de widgets, actions ou dados.
+#   - talvez seja mais fácil só reusar o WidgetSystem pra isso: ele suporta tudo e já tem save/load. Ai como faria uma action que roda um system?

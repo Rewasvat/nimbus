@@ -20,7 +20,7 @@ class DataPinState:
     and therefore the DataPin's, logic.
     """
 
-    def __init__(self, name: str, kind: PinKind, tooltip: str = None):
+    def __init__(self, name: str, kind: PinKind, tooltip: str = None, value_type: type = None):
         self.parent_pin: DataPin = None
         """The pin that owns this state. This initializes as None, but is set by a DataPin when given this state object."""
         self.name = name
@@ -28,6 +28,7 @@ class DataPinState:
         self.tooltip = tooltip
         self.value = None
         """Internal value of this pin state."""
+        self.value_type = value_type
         self.editor: types.TypeEditor = None
         self.setup_editor()
 
@@ -59,7 +60,7 @@ class DataPinState:
 
     def type(self) -> type:
         """Gets the main type of this state. That is, the type of the value this state represents."""
-        return type(self.value)
+        return self.value_type or type(self.value)
 
     def subtypes(self) -> tuple[type, ...]:
         """Gets a tuple of sub-types for this state.
@@ -240,6 +241,12 @@ class DataPin(NodePin):
             imgui.text_colored(Colors.red, "No Editor for updating the value of this pin")
 
     def delete(self):
+        """Deletes this pin.
+
+        Implementations should override this to have their logic for deleting the pin and removing it from its parent node.
+
+        DataPin implementation: deletes the state, removes ourselves from parent node and runs default implementation.
+        """
         self.state.delete()
         self.parent_node.remove_pin(self)
         super().delete()
