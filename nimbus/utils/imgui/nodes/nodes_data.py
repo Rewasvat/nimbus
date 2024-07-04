@@ -6,7 +6,124 @@ from nimbus.utils.imgui.colors import Colors
 from nimbus.utils.imgui.math import Vector2
 
 
+class DataPinState:
+    """Represents the internal state of a DataPin: its PinKind and the data the pin holds.
+    Both the data's value as well as its type, which dictates to which other pins this DataPin may
+    connect to.
+
+    A state has only one parent DataPin, and a DataPin has only one state. The state is passed to the DataPin's constructor,
+    which will then set the state's parent-pin as itself.
+
+    This base state class is simple but functional: it allows storing data of any kind, and will report the pin's type as the
+    value's type. Subclasses (like the ones that already exist here by default) may override this and thus change the state's,
+    and therefore the DataPin's, logic.
+    """
+
+    def __init__(self, name: str, kind: PinKind, tooltip: str = None):
+        self.parent_pin: DataPin = None
+        """The pin that owns this state. This initializes as None, but is set by a DataPin when given this state object."""
+        self.name = name
+        self.kind = kind
+        self.tooltip = tooltip
+        self.value = None
+        """Internal value of this pin state."""
+        self.editor: types.TypeEditor = None
+        self.setup_editor()
+
+    @property
+    def parent_node(self):
+        """Gets the parent node of this state (the parent node of our parent pin)."""
+        return self.parent_pin and self.parent_pin.parent_node
+
+    def get(self):
+        """Gets the value of the state, used by the DataPin that owns this state as its value."""
+        return self.value
+
+    def correct_value(self, value):
+        """Corrects the given value according to our editor.
+
+        While logic may change according to editor configuration, usually (at least with Python's basic types)
+        this tries converting the given value to the editor's expected value type."""
+        if self.editor:
+            value = self.editor._check_value_type(value)
+        return value
+
+    def set(self, value):
+        """Sets the value of this state.
+
+        Args:
+            value (any): the value to set
+        """
+        self.value = value
+
+    def type(self) -> type:
+        """Gets the main type of this state. That is, the type of the value this state represents."""
+        return type(self.value)
+
+    def subtypes(self) -> tuple[type, ...]:
+        """Gets a tuple of sub-types for this state.
+
+        These are "inner" types to our main ``type()``. Common usage is when our main type is a "container" type of some sort
+        (like lists, dicts or tuples), then these subtypes represent the types contained by the main type.
+
+        Examples:
+        * For a main type list, the subtypes should be a single-item tuple: the type of the items in the list.
+        Ex.: ``list[str]`` => main is list, subtypes is ``(str,)``.
+        * For a ``dict[keyType, valueType]``, the main type is ``dict``, while the subtypes is ``(keyType, valueType)``.
+        """
+        return tuple()
+
+    def setup_editor(self, editor: types.TypeEditor = None, data: dict = None):
+        """Sets up our TypeEditor instance, used for editing this state's value in IMGUI.
+
+        Regardless of how the editor is setup, our parent Node can have the ``_update_<property name>_editor(editor)`` methods
+        to dynamically update the editor's config.
+
+        The TypeEditor dictates our parent DataPin's default link color.
+
+        Args:
+            editor (TypeEditor, optional): a TypeEditor instance. Should match our value type. Defaults to None.
+            data (dict, optional): Metadata dict used as argument to create a new TypeEditor instance. Used when given
+            ``editor`` is None. If None, will default to a empty dict. TypeEditor class will be the registered class in
+            the TypeDatabase for our value_type.
+        """
+        if editor is not None:
+            self.editor = editor
+        else:
+            data = data or {}
+            editor_cls = types.TypeDatabase().get_editor_type(self.type())
+            if editor_cls:
+                data["value_type"] = self.type()
+                self.editor = editor_cls(data)
+
+    def delete(self):
+        """Deletes this pin state. Called when the parent pin is deleted."""
+        pass
+
+    def __getstate__(self):
+        """Pickle Protocol: overriding getstate to allow pickling this class.
+        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+        """
+        state = vars(self).copy()
+        if isinstance(self.editor, types.NoopEditor):
+            # TODO: how to properly persist noop editor objects? They fail to pickle because the decorator creates local classes.
+            state["editor"] = None
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        """Pickle Protocol: overriding setstate to allow pickling this class.
+        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+        Use the data to rebuild this instance.
+        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+        """
+        self.__dict__.update(state)
+
+
 # TODO: permitir tipo generic (qualquer coisa), consegue linkar com qualquer outro DataPin
+# TODO: refatorar o getter `pin_tooltip`: do jeito que tá, ele faz um `get_value()` sempre. O problema nisso é que o NodePin faz um
+#   `if self.pin_tooltip` pra ver se precisa sequer tentar setar o tooltip. Então mesmo sem renderizar o tooltip o getter tá sendo
+#   executado EM CADA FRAME.
 class DataPin(NodePin):
     """A DataPin for nodes.
 
@@ -20,24 +137,14 @@ class DataPin(NodePin):
     the result of a calculation as data for other nodes to use.
     """
 
-    def __init__(self, parent: Node, kind: PinKind, name: str, value_type: type, initial_value=None):
-        super().__init__(parent, kind, name)
+    def __init__(self, parent: Node, state: DataPinState):
+        super().__init__(parent, state.kind, state.name)
         self.prettify_name = True
-        self.value = initial_value
-        """Value set in this pin. This is the user-configurable value (in the node editor), which is usually the default value of the pin.
-
-        The proper actual value of the pin may change due to links with other data-pins, in which case this value isn't used. To get the actual
-        value, see ``self.get_value()``.
-        """
-        self.value_type = value_type
-        self._pin_tooltip: str = None
-        self._editor: types.TypeEditor = None
-        self._property: NodeDataProperty = None
-        """The NodeDataProperty of our parent node that created this pin.
-
-        Remember that a Property object belongs to the class, not to the individual instance.
-        """
-        self.setup_editor()
+        self.state = state
+        state.parent_pin = self
+        self.pin_tooltip: str = state.tooltip
+        if state.editor:
+            self.default_link_color = state.editor.color
 
     @property
     def pin_tooltip(self) -> str:
@@ -45,7 +152,7 @@ class DataPin(NodePin):
 
         This sets a fixed tooltip text, but gets a formatted string, containing the fixed text and the pin's value for display.
         """
-        return f"{self._pin_tooltip}\n\nLocal Value: {self.value}\nActual Value: {self.get_value()}"
+        return f"{self._pin_tooltip}\n\nLocal Value: {self.state.get()}\nActual Value: {self.get_value()}"
 
     @pin_tooltip.setter
     def pin_tooltip(self, value: str):
@@ -70,19 +177,19 @@ class DataPin(NodePin):
         as a tuple of types. If a link being connected to this input pin is of a type (the output type) that is a subclass
         of one of these accepted input types, then the connection will be accepted.
 
-        By default, accepted input types always contain our ``self.value_type``. Depending on our TypeEditor's
+        By default, accepted input types always contain our state's ``type()``. Depending on our TypeEditor's
         ``extra_accepted_input_types``, there will be extra types and this might return a type-union or a tuple of types.
 
         This only applies to input pins. Usually for pins of types that can receive values from other types and convert
         them to their type (such as strings and booleans, or ints/floats between themselves)."""
-        if self._editor:
-            extra_types = self._editor.extra_accepted_input_types
+        if self.state.editor:
+            extra_types = self.state.editor.extra_accepted_input_types
             if extra_types is not None:
                 if isinstance(extra_types, tuple):
-                    return tuple([self.value_type] + list(extra_types))
+                    return tuple([self.state.type()] + list(extra_types))
                 else:
-                    return self.value_type | extra_types
-        return self.value_type
+                    return self.state.type() | extra_types
+        return self.state.type()
 
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
@@ -92,10 +199,10 @@ class DataPin(NodePin):
             return False, "Can only link to a Data pin."
         # Type Check: output-pin type must be same or subclass of input-pin type
         if self.pin_kind == PinKind.input:
-            out_type = pin.value_type
+            out_type = pin.state.type()
             in_type = self.accepted_input_types
         else:
-            out_type = self.value_type
+            out_type = self.state.type()
             in_type = pin.accepted_input_types
         if not issubclass(out_type, in_type):
             return False, f"Can't pass '{out_type}' to '{in_type}'"
@@ -104,71 +211,37 @@ class DataPin(NodePin):
 
     def get_value(self):
         """Gets the value of this DataPin. This can be:
-        * For OUTPUT Pins that are associated with a NodeDataProperty with use_prop_value=True: returns the property's value.
-        * For regular OUTPUT Pins: return our ``value``.
         * For INPUT Pins with a link to another data pin: return the value of the output pin we're linked to.
-        * For INPUT Pins without a link: return our ``value``, which serves as a default value.
+        * Otherwise, return the value from our ``state`` object (``state.get()``).
         """
-        if self.pin_kind == PinKind.output:
-            if self._property and self._property.use_prop_value:
-                return self._property.get_prop_value(self.parent_node, type(self.parent_node))
-            return self.value
-        elif self.is_linked_to_any():
+        if self.pin_kind == PinKind.input and self.is_linked_to_any():
             link = self.get_all_links()[0]
             value = link.start_pin.get_value()
-            if self._editor:
-                value = self._editor._check_value_type(value)
-            return value
         else:
-            return self.value  # the input pin's default value
+            value = self.state.get()
+        value = self.state.correct_value(value)
+        return value
 
     def set_value(self, value):
-        """Sets our value to the given object. This should be the same type as it's expected by this DataPin.
-        However, that isn't enforced.
-
-        If this pin is associated with a NodeDataProperty, will also set the value to the property.
-        """
-        self.value = value
-        if self._property:
-            self._property.set_prop_value(self.parent_node, value)
-
-    def setup_editor(self, editor: types.TypeEditor = None, data: dict = None):
-        """Sets up our TypeEditor instance, used for editing this pin's value in IMGUI.
-
-        Regardless of how the editor is setup, our parent Node can have the ``_update_<property name>_editor(editor)`` methods
-        to dynamically update the editor's config.
-
-        When set up with a valid TypeEditor, this pin's default link color will be set to the editor's type color.
-
-        Args:
-            editor (TypeEditor, optional): a TypeEditor instance. Should match our value type. Defaults to None.
-            This is used by ``NodeDataProperty`` when creating its DataPin to associate the property's editor
-            with the pin. This way, property and pin will share the same editor, properly configured with the property's
-            metadata.
-            data (dict, optional): Metadata dict used as argument to create a new TypeEditor instance. Used only when given
-            ``editor`` is None. TypeEditor class will be the registered class in the TypeDatabase for our value_type. Defaults to None,
-            which means we won't try to create a TypeEditor instance.
-        """
-        if editor is not None:
-            self._editor = editor
-        elif data is not None:
-            editor_cls = types.TypeDatabase().get_editor_type(self.value_type)
-            if editor_cls:
-                data["value_type"] = self.value_type
-                self._editor = editor_cls(data)
-        if self._editor:
-            self.default_link_color = self._editor.color
+        """Sets the value of our state to the given object. This should be the same type as it's expected by this DataPin.
+        However, that isn't enforced."""
+        self.state.set(value)
 
     def render_edit_details(self):
         # Let output pins have their value edited/set as well. That will enable setting a output pin's default value.
         # And also allow nodes without flow connections that only output static values!
-        if self._editor:
-            self._editor.update_from_obj(self.parent_node, self.pin_name)
-            changed, new_value = self._editor.render_value_editor(self.value)
+        if self.state.editor:
+            self.state.editor.update_from_obj(self.parent_node, self.pin_name)
+            changed, new_value = self.state.editor.render_value_editor(self.state.get())
             if changed:
                 self.set_value(new_value)
         else:
             imgui.text_colored(Colors.red, "No Editor for updating the value of this pin")
+
+    def delete(self):
+        self.state.delete()
+        self.parent_node.remove_pin(self)
+        super().delete()
 
     def on_new_link_added(self, link: NodeLink):
         if self.pin_kind == PinKind.input:
@@ -179,28 +252,6 @@ class DataPin(NodePin):
 
     def __str__(self):
         return f"{self.pin_kind.name.capitalize()} Data {self.pin_name}"
-
-    def __getstate__(self):
-        state = super().__getstate__()
-        if self._property and self._property.use_prop_value:
-            # No need to save our value if we directly use the value from the property.
-            state["value"] = None
-        state["_property"] = self._property is not None
-        if isinstance(self._editor, types.NoopEditor):
-            # TODO: how to properly persist noop editor objects? They fail to pickle because the decorator creates local classes.
-            state["_editor"] = None
-        # Property will be updated on self._update_state_after_recreation()
-        # We can't update it normally on self.__setstate__(state) since on that point, we would have no parent node.
-        return state
-
-    def _update_state_after_recreation(self, parent: Node):
-        super()._update_state_after_recreation(parent)
-        if self._property is True:
-            props: dict[str, NodeDataProperty] = get_all_properties(type(parent), NodeDataProperty)
-            self._property = props[self.pin_name]
-            self._property.data_pins[parent] = self
-        if self._editor and self._property:
-            self._property.editors[parent] = self._editor
 
 
 class NodeDataProperty(types.ImguiProperty):
@@ -228,7 +279,10 @@ class NodeDataProperty(types.ImguiProperty):
         """If this property, and our DataPin, should always get/set value from the property itself.
 
         Instead of getting/setting from the DataPin, which is the default behavior so that common data-properties don't need to
-        implement proper getters/setters."""
+        implement proper getters/setters.
+
+        This is mostly intended for output pins, so that whoever uses it gets the pin's value directly from the property's getter function.
+        That way the node doesn't need to directly set the output value (assuming the getter is capable of getting the value itself)."""
         return self.metadata.get("use_prop_value", False)
 
     @property
@@ -250,7 +304,7 @@ class NodeDataProperty(types.ImguiProperty):
         pin = self.get_pin(obj)
         if pin:
             pin.set_value(value)
-            # DataPin.set_value should call self.set_prop_value().
+            # The DataPropertyState we use with our pins should call self.set_prop_value().
         else:
             self.set_prop_value(obj, value)
 
@@ -279,12 +333,9 @@ class NodeDataProperty(types.ImguiProperty):
         """
         pin: DataPin = self.data_pins.get(obj)
         if pin is None:
-            value_type = self.get_value_type(obj)
-            initial_value = super().__get__(obj, type(obj))
-            pin = self.pin_class(obj, self.pin_kind, self.name, value_type, initial_value)
-            pin.pin_tooltip = self.__doc__
-            pin._property = self
-            pin.setup_editor(editor=self.get_editor(obj))
+            state = DataPropertyState(self)
+            state.set_initial_value(obj)
+            pin = self.pin_class(obj, state)
             self.data_pins[obj] = pin
         return pin
 
@@ -337,3 +388,64 @@ def create_data_pins_from_properties(node: Node):
         else:
             outputs.append(pin)
     return inputs, outputs
+
+
+class DataPropertyState(DataPinState):
+    """Specialized DataPin State that associates the pin's state with that of a NodeDataProperty
+    from a object.
+
+    The pin's name, kind, type and value will match that of the property in the node.
+    """
+
+    def __init__(self, prop: NodeDataProperty):
+        self._property = prop
+        super().__init__(prop.name, prop.pin_kind, prop.__doc__)
+
+    @property
+    def property(self):
+        """Gets the property associated with this state. It's the NodeDataProperty that created this state to create its DataPin.
+        Should always be a valid property object.
+
+        Remember that property objects are class attributes, not instance attributes!
+        """
+        return self._property
+
+    def set_initial_value(self, node: Node):
+        """Sets the internal value of this state with the value of our property, given its owner node."""
+        self.value = self.property.get_prop_value(node)
+        self.setup_editor(editor=self.property.get_editor(node))
+
+    def get(self):
+        if self.property.use_prop_value:
+            return self.property.get_prop_value(self.parent_node)
+        return super().get()
+
+    def set(self, value):
+        self.property.set_prop_value(self.parent_node, value)
+        super().set(value)
+
+    def type(self):
+        return self.property.get_value_type(self.parent_node)
+
+    def subtypes(self):
+        return self.property.get_value_subtypes()
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        if self.property.use_prop_value:
+            # No need to save our value if we directly use the value from the property.
+            state["value"] = None
+        # We need the parent-node and property name in order to recreate the property object on unpickling.
+        # The name we already have (our self.name). Doing this of storing the parent-node directly to ensure we can get/use it in self.__setstate__()
+        state["_property"] = self.parent_node
+        return state
+
+    def __setstate__(self, state: dict[str]):
+        super().__setstate__(state)
+        parent_node = self._property
+        props: dict[str, NodeDataProperty] = get_all_properties(type(parent_node), NodeDataProperty)
+        self._property = props[self.name]
+        self._property.data_pins[parent_node] = self.parent_pin
+        if self.editor and self._property:
+            self._property.editors[parent_node] = self.editor
+
