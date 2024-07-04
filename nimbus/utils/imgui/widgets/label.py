@@ -182,34 +182,6 @@ class TextMixin:
         """
         return text
 
-    def _substitute(self, text: str, tags: dict[str, any]):
-        """Utility method to substitute ``{key}`` (or ``{key:format}``) tags in the given TEXT with the
-        value for ``key`` in TAGS, using the ``format``, if any.
-
-        Args:
-            text (str): the text to check for tags.
-            tags (dict[str, any]): a ``{tag key -> tag value}`` dict, used to match values for the tag keys found
-            in the TEXT. If a key isn't found, the key itself is used as default value.
-
-        Returns:
-            str: text with tags replaced with their value.
-        """
-        def replacer(m: re.Match):
-            pack: str = m.group(1)
-            parts = pack.split(":")
-            key = parts[0]
-            if len(parts) <= 1:
-                value_format = "{}"
-            else:
-                value_format = f"{{0:{parts[1]}}}"
-            value = tags.get(key, key)
-            try:
-                return value_format.format(value)
-            except Exception:
-                return str(value)
-
-        return re.sub(r"{([^}]+)}", replacer, text)
-
 
 class Label(TextMixin, LeafWidget):
     """Simple text widget."""

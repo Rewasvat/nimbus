@@ -167,4 +167,8 @@ class ProgressBar(RectMixin, TextMixin, LeafWidget):
         self._handle_interaction()
 
     def _format_text(self, text: str):
-        return self._substitute(text, {"value": self.value * 100})
+        tags = {"value": self.value * 100}
+        try:
+            return text.format(**tags)
+        except Exception:
+            return str(text)
