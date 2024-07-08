@@ -13,6 +13,57 @@ class Color(ImVec4):
         """Gets this color as a ImU32 value, used by some low-level imgui API, such as DrawLists."""
         return imgui.get_color_u32(self)
 
+    def clamp(self):
+        """Ensures the components of this Color are in the expected [0, 1] range."""
+        self.x = max(0, min(1, self.x))
+        self.y = max(0, min(1, self.y))
+        self.z = max(0, min(1, self.z))
+        self.w = max(0, min(1, self.w))
+
+    def __add__(self, other):
+        """ADDITION: returns a new Color instance with our values and ``other`` added.
+
+        ``other`` may be:
+        * scalar value (float, int): adds the value to each component.
+        * Color/ImVec4/tuple/list: adds other[0] to our [0], other[1] to our [1], and so on.
+        """
+        if isinstance(other, (float, int)):
+            return self.__class__(self.x + other, self.y + other, self.z + other, self.w + other)
+        return self.__class__(self[0] + other[0], self[1] + other[1], self[2] + other[2], self[3] + other[3])
+
+    def __sub__(self, other):
+        """SUBTRACT: returns a new Color instance with our values and ``other`` subtracted.
+
+        ``other`` may be:
+        * scalar value (float, int): subtracts the value to each component.
+        * Color/ImVec4/tuple/list: subtracts other[0] from our [0], other[1] from our [1], and so on.
+        """
+        if isinstance(other, (float, int)):
+            return self.__class__(self.x - other, self.y - other, self.z - other, self.w - other)
+        return self.__class__(self[0] - other[0], self[1] - other[1], self[2] - other[2], self[3] - other[3])
+
+    def __mul__(self, other):
+        """MULTIPLICATION: returns a new Color instance with our values and ``other`` multiplied.
+
+        ``other`` may be:
+        * scalar value (float, int): multiplies the value to each component.
+        * Color/ImVec4/tuple/list: multiplies other[0] to our [0], other[1] to our [1], and so on.
+        """
+        if isinstance(other, (float, int)):
+            return self.__class__(self.x * other, self.y * other, self.z * other, self.w * other)
+        return self.__class__(self[0] * other[0], self[1] * other[1], self[2] * other[2], self[3] * other[3])
+
+    def __truediv__(self, other):
+        """DIVISION: returns a new Color instance with our values and ``other`` divided.
+
+        ``other`` may be:
+        * scalar value (float, int): divides the value to each component.
+        * Color/ImVec4/tuple/list: divides other[0] to our [0], other[1] to our [1], and so on.
+        """
+        if isinstance(other, (float, int)):
+            return self.__class__(self.x / other, self.y / other, self.z / other, self.w / other)
+        return self.__class__(self[0] / other[0], self[1] / other[1], self[2] / other[2], self[3] / other[3])
+
     def __getstate__(self):
         """Pickle Protocol: overriding getstate to allow pickling this class.
         This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
@@ -83,6 +134,27 @@ class ColorsClass:
         related methods in imgui's API I tried didn't work.
         """
         return Color(0.055, 0.055, 0.055, 1)
+
+    @classmethod
+    def mean_color(cls, colors: list[Color]):
+        """Calculates the mean color value to the given colors.
+
+        Each RGBA component of the mean color is the mean of the same component from the given colors.
+        Mean components are clamped to the expected [0, 1] range of colors.
+
+        Args:
+            colors (list[Color]): colors to get the mean.
+
+        Returns:
+            Color: the mean color.
+        """
+        summed = sum(colors, Color())
+        size = len(colors)
+        if size <= 0:
+            return summed
+        summed /= size
+        summed.clamp()
+        return summed
 
 
 Colors = ColorsClass()
