@@ -21,20 +21,41 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
         self._types: dict[type, type[TypeEditor]] = {}
         self._creatable_types: dict[type, bool] = {}
 
-    def get_editor_type(self, value_type: type):
-        """Gets the registered TypeEditor class for editing the given value type.
+    def get_editor(self, value_type: type, config: dict[str, any] = None):
+        """Creates a new TypeEditor instance for the given value type with the appropriate available TypeEditor class.
+
+        This accepts regular ("actual") type objects and other type-hints, such as type aliases, generic types (``list[T]``)
+        and union of types as the value_type.
+        * For aliases/type-hints: the actual type (its origin) and sub-types (the hint's args) is used.
+        * When handling actual type objects, its MRO is followed until we find a registered TypeEditor that handles that type.
+        * For type unions, a specialized UnionEditor instance is returned.
 
         Args:
-            value_type (type): The type to get the editor for. This method will follow value_type's MRO,
-            until it finds a registered editor.
+            value_type (type): The type to create the editor for.
+            config (dict[str,any], optional): The configuration dict for the editor. These set the editor's attributes initial values.
 
         Returns:
-            type[TypeEditor]: A TypeEditor class that can edit the given value_type, or None
+            TypeEditor: A TypeEditor instance that can edit the given value_type, or None
             if no editor is registered for that type (or any of its parent classes).
         """
-        for cls in value_type.mro():
-            if cls in self._types:
-                return self._types[cls]
+        actual_type = typing.get_origin(value_type) or value_type
+        subtypes = typing.get_args(value_type)
+        is_union = actual_type is types.UnionType
+        editor_cls = None
+        if is_union:
+            editor_cls = UnionEditor
+            actual_type = value_type  # UnionEditor needs original_type==value_type, being the union itself.
+        else:
+            for cls in actual_type.mro():
+                if cls in self._types:
+                    editor_cls = self._types[cls]
+                    break
+        if editor_cls:
+            config = config or {}
+            config["original_type"] = value_type
+            config["value_type"] = actual_type
+            config["value_subtypes"] = subtypes
+            return editor_cls(config)
 
     def add_type_editor(self, cls: type, editor_class: type['TypeEditor'], is_creatable=True):
         """Adds a new TypeEditor class in this database associated with the given type.
@@ -94,8 +115,8 @@ class TypeDatabase(metaclass=cmd_utils.Singleton):
         """
         def decorator(type_cls):
             class SpecificNoopEditor(NoopEditor):
-                def __init__(self, data: dict):
-                    super().__init__(data)
+                def __init__(self, config: dict):
+                    super().__init__(config)
                     self.color = color
             db = cls()
             db.add_type_editor(type_cls, SpecificNoopEditor, False)
@@ -142,7 +163,7 @@ class ImguiProperty(AdvProperty):
             elif obj is not None:
                 # Try getting type from property getter return value.
                 return type(self.fget(obj))
-        return typing.get_origin(cls) or cls
+        return cls
 
     def get_value_subtypes(self) -> tuple[type, ...]:
         """Gets the subtypes of this property (the subtypes of its value-type).
@@ -162,43 +183,24 @@ class ImguiProperty(AdvProperty):
             return tuple()
         return typing.get_args(cls)
 
-    def get_value_editor(self, obj=None):
-        """Gets the TypeEditor class used to edit this property value's type.
-
-        This uses uses the ``TypeDatabase`` to get the editor class for our ``self.get_value_type()``.
-
-        Args:
-            obj (optional): The object that owns this property. Defaults to None.
-
-        Returns:
-            type[TypeEditor]: a TypeEditor class that can edit the type of this property's value, or one of its parent classes.
-            If no editor is registered for our value-type (or parent types), then this will be None.
-        """
-        database = TypeDatabase()
-        return database.get_editor_type(self.get_value_type(obj))
-
-    def get_editor_data(self, obj):
-        """Gets the TypeEditor data dict used to initialize editors for this property, for
+    def get_editor_config(self):
+        """Gets the TypeEditor config dict used to initialize editors for this property, for
         the given object (property owner).
 
-        Args:
-            obj (any): a object of the class that owns this property.
-
         Returns:
-            dict: the data dict to pass to a TypeEditor's constructor.
+            dict: the config dict to pass to a TypeEditor's constructor.
         """
-        data = self.metadata.copy()
-        if "doc" not in data:
-            data["doc"] = self.__doc__
-        data["value_type"] = self.get_value_type(obj)
-        return data
+        config = self.metadata.copy()
+        if "doc" not in config:
+            config["doc"] = self.__doc__
+        return config
 
     def get_editor(self, obj):
         """Gets the TypeEditor instance for the given object, for editing this property's value.
 
-        This property stores a table of obj->TypeEditor instance. So each object will always use the same
-        editor for its property. If the editor instance doesn't exist, one will be created with the TypeEditor
-        class returned from ``self.get_value_editor(obj)``, passing this property's metadata as argument.
+        This property stores a table of obj->TypeEditor instances. So each object will always use the same
+        editor for its property. If the editor instance doesn't exist, one will be created according to our value-type,
+        passing this property's metadata as config.
 
         Args:
             obj (any): The object that owns this property. A property is created as part of a class, thus this object
@@ -210,10 +212,10 @@ class ImguiProperty(AdvProperty):
             registered for it).
         """
         editor: TypeEditor = self.editors.get(obj, None)
-        editor_cls = self.get_value_editor(obj)
-        if editor is None and editor_cls is not None:
-            data = self.get_editor_data(obj)
-            editor = editor_cls(data)
+        if editor is None:
+            database = TypeDatabase()
+            config = self.get_editor_config()
+            editor = database.get_editor(self.get_value_type(obj), config)
             self.editors[obj] = editor
         return editor
 
@@ -266,8 +268,6 @@ def imgui_property(**kwargs):
 #   assim a funcionalidade ficaria mais próxima do TPLove TableEditor, permitindo estruturas de dados quaisquer.
 # TODO: refatorar pra ser fácil poder ter valor None sem quebrar as coisas.
 #   - talvez uma flag "can be None?" ou algo assim nos editors?
-#   - editores saberem o type do que eles editam, ai podiam fazer type() pra criar o valor default (isso ficaria mais facil com a refatoração com
-#     reflection definicao automatica dos editores)
 class TypeEditor:
     """Basic class for a value editor in imgui.
 
@@ -290,10 +290,20 @@ class TypeEditor:
     the metadata of that type.
     """
 
-    def __init__(self, data: dict):
-        self.value_type: type = data.get("value_type")
-        """The type of our expected values."""
-        self.attr_doc = data.get("doc", "")
+    def __init__(self, config: dict):
+        self.original_type: type = config.get("original_type")
+        """The original type used to create this Editor instance. This might be any kind of type-hint, such as
+        an actual type object, a union of types, type aliases, and so on. See ``self.value_type`` and ``self.value_subtypes``."""
+        self.value_type: type = config.get("value_type")
+        """The actual type object of our expected value."""
+        self.value_subtypes: tuple[type, ...] = config.get("value_subtypes")
+        """The subtypes (or "arg" types) of our value-type. This is always a tuple of types, and might be empty if no subtypes exist.
+        This is used when the original-type is a type-hint that "contains" or "uses" other types, such as:
+        * For example, if original is ``list[T]``, subtypes will be ``(T,)`` while the value-type is ``list``.
+        * Another example, if original is ``dict[K,V]``, subtypes will be ``(K,V)`` while value-type is ``dict``.
+        * For a union type, the subtypes is a tuple of all types in the union.
+        """
+        self.attr_doc = config.get("doc", "")
         """The value's docstring, usually used as a tooltip when editing to explain that value.
 
         When TypeEditor is created from a imgui-property, by default this value is the property's docstring.
@@ -315,6 +325,10 @@ class TypeEditor:
         self.convert_value_to_type = False
         """If the value we receive should be converted to our ``value_type`` before using. This is done using
         ``self.value_type(value)``, like most basic python types accept."""
+
+    def type_name(self):
+        """Gets a human readable name of the type represented by this editor."""
+        return self.value_type.__name__
 
     def render_property(self, obj, name: str):
         """Renders this type editor as a KEY:VALUE editor for a ``obj.name`` property/attribute.
@@ -399,7 +413,10 @@ class TypeEditor:
             value (T): the value to type-check.
 
         Returns:
-            _type_: _description_
+            T: the value, converted to our ``self.value_type`` if required and possible.
+            If conversion is not required, returns the same value received.
+            If conversion is required but fails with a TypeError and value is None, will return ``self.value_type()`` to create a default
+            value of our type, otherwise will (re)raise the error from the conversion.
         """
         if self.convert_value_to_type and self.value_type and not isinstance(value, self.value_type):
             try:
@@ -419,15 +436,15 @@ class TypeEditor:
 class StringEditor(TypeEditor):
     """Imgui TypeEditor for editing a STRING value."""
 
-    def __init__(self, data: dict):
-        super().__init__(data)
-        self.flags: imgui.InputTextFlags_ = data.get("flags", imgui.InputTextFlags_.none)
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.flags: imgui.InputTextFlags_ = config.get("flags", imgui.InputTextFlags_.none)
         # String Enums attributes
-        self.options: list[str] = data.get("options")
-        self.docs: list[str] | dict[str, str] | None = data.get("docs")
-        self.option_flags: imgui.SelectableFlags_ = data.get("flags", 0)
+        self.options: list[str] = config.get("options")
+        self.docs: list[str] | dict[str, str] | None = config.get("docs")
+        self.option_flags: imgui.SelectableFlags_ = config.get("flags", 0)
         self.add_tooltip_after_value = self.options is None
-        self.multiline: bool = data.get("multiline", False)
+        self.multiline: bool = config.get("multiline", False)
         self.color = Colors.magenta
         self.extra_accepted_input_types = object
         self.convert_value_to_type = True
@@ -468,11 +485,11 @@ def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None,
 class EnumEditor(TypeEditor):
     """Imgui TypeEditor for editing a ENUM value."""
 
-    def __init__(self, data: dict):
-        super().__init__(data)
+    def __init__(self, config: dict):
+        super().__init__(config)
         self.add_tooltip_after_value = False
         self.color = Colors.yellow
-        self.flags: imgui.SelectableFlags_ = data.get("flags", 0)
+        self.flags: imgui.SelectableFlags_ = config.get("flags", 0)
 
     def draw_value_editor(self, value: str | Enum) -> tuple[bool, str | Enum]:
         return enum_drop_down(value, self.attr_doc, self.flags)
@@ -493,8 +510,8 @@ def enum_property(flags: imgui.SelectableFlags_ = 0):
 class BoolEditor(TypeEditor):
     """Imgui TypeEditor for editing a BOOLEAN value."""
 
-    def __init__(self, data: dict):
-        super().__init__(data)
+    def __init__(self, config: dict):
+        super().__init__(config)
         self.color = Colors.red
         self.extra_accepted_input_types = object
         self.convert_value_to_type = True
@@ -515,7 +532,7 @@ def bool_property():
 class FloatEditor(TypeEditor):
     """Imgui TypeEditor for editing a FLOAT value."""
 
-    def __init__(self, data: dict):
+    def __init__(self, config: dict):
         """
         Args:
             min (float, optional): Minimum allowed value for this float property. Defaults to 0.0.
@@ -527,21 +544,21 @@ class FloatEditor(TypeEditor):
             MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_float`` control. Defaults to False.
             flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
         """
-        super().__init__(data)
-        self.is_slider: bool = data.get("is_slider", False)
+        super().__init__(config)
+        self.is_slider: bool = config.get("is_slider", False)
         """If the float control will be a slider to easily choose between the min/max values. Otherwise the float control will
         be a drag-float."""
-        self.speed: float = data.get("speed", 1.0)
+        self.speed: float = config.get("speed", 1.0)
         """Speed of value change when dragging the control's value. Only applies when using drag-controls (is_slider=False)"""
-        self.min: float = data.get("min", 0.0)
+        self.min: float = config.get("min", 0.0)
         """Minimum value allowed. For proper automatic bounds in the control, ``max`` should also be defined, and be bigger than this minimum.
         Also use the ``always_clamp`` slider flags."""
-        self.max: float = data.get("max", 0.0)
+        self.max: float = config.get("max", 0.0)
         """Maximum value allowed. For proper automatic bounds in the control, ``min`` should also be defined, and be lesser than this maximum.
         Also use the ``always_clamp`` slider flags."""
-        self.format: str = data.get("format", "%.2f")
+        self.format: str = config.get("format", "%.2f")
         """Format to use to convert value to display as text in the control (use python float format, such as ``%.2f``)"""
-        self.flags: imgui.SliderFlags_ = data.get("flags", 0)
+        self.flags: imgui.SliderFlags_ = config.get("flags", 0)
         """Slider flags to use in imgui's float control."""
         self.color = Colors.green
         self.convert_value_to_type = True
@@ -578,7 +595,7 @@ def float_property(min=0.0, max=0.0, format="%.2f", speed=1.0, is_slider=False, 
 class IntEditor(TypeEditor):
     """Imgui TypeEditor for editing a INTEGER value."""
 
-    def __init__(self, data: dict):
+    def __init__(self, config: dict):
         """
         Args:
             min (int, optional): Minimum allowed value for this int property. Defaults to 0.
@@ -590,21 +607,21 @@ class IntEditor(TypeEditor):
             MIN<MAX (if those are valid). Otherwise defaults to using a ``drag_int`` control. Defaults to False.
             flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag int controls. Defaults to imgui.SliderFlags_.none.
         """
-        super().__init__(data)
-        self.is_slider: bool = data.get("is_slider", False)
+        super().__init__(config)
+        self.is_slider: bool = config.get("is_slider", False)
         """If the int control will be a slider to easily choose between the min/max values. Otherwise the int control will
         be a drag-int."""
-        self.speed: float = data.get("speed", 1.0)
+        self.speed: float = config.get("speed", 1.0)
         """Speed of value change when dragging the control's value. Only applies when using drag-controls (is_slider=False)"""
-        self.min: int = data.get("min", 0)
+        self.min: int = config.get("min", 0)
         """Minimum value allowed. For proper automatic bounds in the control, ``max`` should also be defined, and be bigger than this minimum.
         Also use the ``always_clamp`` slider flags."""
-        self.max: int = data.get("max", 0)
+        self.max: int = config.get("max", 0)
         """Maximum value allowed. For proper automatic bounds in the control, ``min`` should also be defined, and be lesser than this maximum.
         Also use the ``always_clamp`` slider flags."""
-        self.format: str = data.get("format", "%d")
+        self.format: str = config.get("format", "%d")
         """Format to use to convert value to display as text in the control (use python int format, such as ``%d``)"""
-        self.flags: imgui.SliderFlags_ = data.get("flags", 0)
+        self.flags: imgui.SliderFlags_ = config.get("flags", 0)
         """Slider flags to use in imgui's int control."""
         self.color = Colors.cyan
         self.convert_value_to_type = True
@@ -641,11 +658,12 @@ def int_property(min=0, max=0, format="%d", speed=1, is_slider=False, flags: img
 class ColorEditor(TypeEditor):
     """Imgui TypeEditor for editing a COLOR value."""
 
-    def __init__(self, data: dict):
+    def __init__(self, config: dict):
         # flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none
-        super().__init__(data)
-        self.flags: imgui.ColorEditFlags_ = data.get("flags", 0)
+        super().__init__(config)
+        self.flags: imgui.ColorEditFlags_ = config.get("flags", 0)
         self.color = Color(1, 0.5, 0.3, 1)
+        self.convert_value_to_type = True
 
     def draw_value_editor(self, value: Color):
         if value is None:
@@ -668,8 +686,8 @@ def color_property(flags: imgui.ColorEditFlags_ = imgui.ColorEditFlags_.none):
 class ListEditor(TypeEditor):
     """Imgui TypeEditor for editing a LIST value."""
 
-    def __init__(self, data: dict, item_editor: TypeEditor, default_item=None):
-        super().__init__(data)
+    def __init__(self, config: dict, item_editor: TypeEditor, default_item=None):
+        super().__init__(config)
         self.default_item = default_item
         self.item_editor = item_editor
         item_editor.value_getter = lambda obj, i: obj[i]
@@ -740,15 +758,16 @@ class ListEditor(TypeEditor):
 class Vector2Editor(TypeEditor):
     """Imgui TypeEditor for editing a Vector2 value."""
 
-    def __init__(self, data: dict):
-        super().__init__(data)
-        self.speed: float = data.get("speed", 1.0)
-        self.format: str = data.get("format", "%.2f")
-        self.flags: imgui.SliderFlags_ = data.get("flags", 0)
-        self.x_range: Vector2 = data.get("x_range", (0, 0))
-        self.y_range: Vector2 = data.get("y_range", (0, 0))
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.speed: float = config.get("speed", 1.0)
+        self.format: str = config.get("format", "%.2f")
+        self.flags: imgui.SliderFlags_ = config.get("flags", 0)
+        self.x_range: Vector2 = config.get("x_range", (0, 0))
+        self.y_range: Vector2 = config.get("y_range", (0, 0))
         self.add_tooltip_after_value = False
         self.color = Color(0, 0.5, 1, 1)
+        self.convert_value_to_type = True
 
     def draw_value_editor(self, value: Vector2):
         if value is None:
@@ -772,17 +791,6 @@ class Vector2Editor(TypeEditor):
             return imgui.drag_float("##value", value, self.speed, min, max, self.format, self.flags)
 
 
-class NoopEditor(TypeEditor):
-    """Imgui TypeEditor for a type that can't be edited.
-
-    This allows editors to exist, and thus provide some other features (such as type color), for types that can't be edited.
-    """
-
-    def draw_value_editor[T](self, value: T) -> tuple[bool, T]:
-        imgui.text_colored(Colors.yellow, f"Can't edit object '{value}'")
-        return False, value
-
-
 def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, flags: imgui.SliderFlags_ = 0):
     """Imgui Property attribute for a Vector2 type.
 
@@ -797,6 +805,84 @@ def vector2_property(x_range=(0, 0), y_range=(0, 0), format="%.2f", speed=1.0, f
         flags (imgui.SliderFlags_, optional): Flags for the Slider/Drag float controls. Defaults to imgui.SliderFlags_.none.
     """
     return imgui_property(x_range=x_range, y_range=y_range, format=format, speed=speed, flags=flags)
+
+
+class NoopEditor(TypeEditor):
+    """Imgui TypeEditor for a type that can't be edited.
+
+    This allows editors to exist, and thus provide some other features (such as type color), for types that can't be edited.
+    """
+
+    def draw_value_editor[T](self, value: T) -> tuple[bool, T]:
+        imgui.text_colored(Colors.yellow, f"Can't edit object '{value}'")
+        return False, value
+
+
+class UnionEditor(TypeEditor):
+    """Specialized TypeEditor for UnionType objects (ex.: ``int | float``).
+
+    This editor represents several types (from the union) instead of a single type.
+    Values edited with this may be from any one of these "sub-types", and the rendered IMGUI
+    controls allows changing the type of the value. If a value's type is not known (such as a None),
+    we'll default to the first sub-type.
+
+    Internally, we use other TypeEditors instances for each specific sub-types. The UnionEditor instance
+    and its internal "sub-editors" share the same configuration dict. UnionEditor color is the mean color
+    of all sub-editors.
+
+    Note! Since this allows changing the type of the value between any of the sub-types, it is expected that
+    the sub-types are convertible between themselves.
+
+    This editor class is not registered in the TypeDatabase for any particular kind of (union) type. Instead,
+    the TypeDatabase will manually always return a instance of this editor of any union-type that is given.
+    """
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        database = TypeDatabase()
+        self.subeditors: dict[str, TypeEditor] = {}
+        colors = []
+        for subtype in self.value_subtypes:
+            subeditor = database.get_editor(subtype, config)
+            self.subeditors[subeditor.type_name()] = subeditor
+            colors.append(subeditor.color)
+        self.color = Colors.mean_color(colors)
+
+    def type_name(self):
+        # When creating a UnionEditor, original_type and value_type should be the same: the union-type object.
+        return str(self.value_type)
+
+    def draw_value_editor[T](self, value: T) -> tuple[bool, T]:
+        # Get current subeditor for the given value
+        subtypes = list(self.subeditors.keys())
+        selected_type = self.get_current_value_type(value)
+        # Allow used to change the value's type.
+        changed_type, selected_type = drop_down(selected_type, subtypes, default_doc="Type to use with this value")
+        imgui.same_line()
+        # Render sub-editor
+        subeditor = self.subeditors[selected_type]
+        changed, value = subeditor.render_value_editor(value)
+        return changed or changed_type, value
+
+    def _check_value_type[T](self, value: T) -> T:
+        subeditor = self.subeditors[self.get_current_value_type(value)]
+        return subeditor._check_value_type(value)
+
+    def get_current_value_type(self, value):
+        """Gets the name of the current type of value, testing it against our possible subtypes.
+
+        Name returned is the type-name which can be used with ``self.subeditors`` to get the editor for that sub-type.
+
+        Args:
+            value (any): the value to check
+
+        Returns:
+            str: type-name (from our possible subtype names) that matches the given value's type.
+        """
+        for name, subeditor in self.subeditors.items():
+            if isinstance(value, subeditor.value_type):
+                return name
+        return list(self.subeditors.keys())[0]  # defaults to first subtype
 
 
 def get_all_renderable_properties(cls: type) -> dict[str, ImguiProperty]:
