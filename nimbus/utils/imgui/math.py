@@ -9,6 +9,16 @@ class Vector2(ImVec2):
     This can be used in place of ImVec2 objects when passing to ``imgui`` API functions.
     """
 
+    def __init__(self, obj: float | tuple[float, float] | list[float] | ImVec2 = None, y: float = None):
+        if y is not None:
+            super().__init__(obj, y)
+        elif isinstance(obj, int | float):
+            super().__init__(obj, 0)
+        elif obj is not None:
+            super().__init__(obj)
+        else:
+            super().__init__()
+
     def __add__(self, other):
         """ADDITION: returns a new Vector2 instance with our values and ``other`` added.
 
@@ -68,6 +78,14 @@ class Vector2(ImVec2):
         """
         self.x = state.get("x", 0)
         self.y = state.get("y", 0)
+
+    def __float__(self):
+        """``float(this)`` callback: converts Vector to a single float (the X component)."""
+        return self.x
+
+    def __int__(self):
+        """``int(this)`` callback: converts Vector to a single int (the X component)."""
+        return int(self.x)
 
     def length_squared(self):
         """Gets the sum of our components to the potency of 2."""
