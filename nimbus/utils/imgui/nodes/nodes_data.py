@@ -193,6 +193,21 @@ class DataPin(NodePin):
                     return self.state.type() | extra_types
         return self.state.type()
 
+    @property
+    def output_type(self) -> type:
+        """Real type of value this Output DataPin is providing.
+
+        This defaults to our state's ``type()``. If that is not a type instance, then we'll
+        return the type of our state's corrected value.
+        """
+        out = self.state.type()
+        if not isinstance(out, type):
+            # Our state's type is not an actual type. Must be a union of types or type alias.
+            value = self.state.get()
+            value = self.state.correct_value(value)
+            return type(value)
+        return out
+
     def can_link_to(self, pin: NodePin) -> tuple[bool, str]:
         ok, msg = super().can_link_to(pin)
         if not ok:
@@ -201,10 +216,10 @@ class DataPin(NodePin):
             return False, "Can only link to a Data pin."
         # Type Check: output-pin type must be same or subclass of input-pin type
         if self.pin_kind == PinKind.input:
-            out_type = pin.state.type()
+            out_type = pin.output_type
             in_type = self.accepted_input_types
         else:
-            out_type = self.state.type()
+            out_type = self.output_type
             in_type = pin.accepted_input_types
         if not issubclass(out_type, in_type):
             return False, f"Can't pass '{out_type}' to '{in_type}'"
