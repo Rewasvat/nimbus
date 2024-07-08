@@ -75,7 +75,7 @@ class DataPinState:
         """
         return tuple()
 
-    def setup_editor(self, editor: types.TypeEditor = None, data: dict = None):
+    def setup_editor(self, editor: types.TypeEditor = None, config: dict = None):
         """Sets up our TypeEditor instance, used for editing this state's value in IMGUI.
 
         Regardless of how the editor is setup, our parent Node can have the ``_update_<property name>_editor(editor)`` methods
@@ -85,18 +85,14 @@ class DataPinState:
 
         Args:
             editor (TypeEditor, optional): a TypeEditor instance. Should match our value type. Defaults to None.
-            data (dict, optional): Metadata dict used as argument to create a new TypeEditor instance. Used when given
+            config (dict, optional): Metadata dict used as argument to create a new TypeEditor instance. Used when given
             ``editor`` is None. If None, will default to a empty dict. TypeEditor class will be the registered class in
             the TypeDatabase for our value_type.
         """
         if editor is not None:
             self.editor = editor
         else:
-            data = data or {}
-            editor_cls = types.TypeDatabase().get_editor_type(self.type())
-            if editor_cls:
-                data["value_type"] = self.type()
-                self.editor = editor_cls(data)
+            self.editor = types.TypeDatabase().get_editor(self.type(), config)
 
     def delete(self):
         """Deletes this pin state. Called when the parent pin is deleted."""
@@ -582,8 +578,8 @@ class DynamicInputSubPinState(DataPinState):
         name = f"{owner.name} #{len(owner.parent_pin._sub_pins)+1}"
         self.owner = owner
         super().__init__(name, owner.kind, owner.tooltip)
-        editor_data = owner.property.get_editor_data(owner.parent_node)
-        self.setup_editor(data=editor_data)
+        editor_config = owner.property.get_editor_config(owner.parent_node)
+        self.setup_editor(config=editor_config)
 
     @property
     def index(self):
