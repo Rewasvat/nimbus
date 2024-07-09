@@ -461,7 +461,7 @@ class StringEditor(TypeEditor):
                 changed, new_value = imgui.input_text("##", value, flags=self.flags)
             return changed, new_value.replace("\\n", "\n")
         else:
-            return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, flags=self.option_flags)
+            return drop_down(value, self.options, self.docs, default_doc=self.attr_doc, item_flags=self.option_flags)
 
 
 def string_property(flags: imgui.InputTextFlags_ = 0, options: list[str] = None, docs: list | dict = None, option_flags: imgui.SelectableFlags_ = 0):
@@ -857,7 +857,8 @@ class UnionEditor(TypeEditor):
         subtypes = list(self.subeditors.keys())
         selected_type = self.get_current_value_type(value)
         # Allow used to change the value's type.
-        changed_type, selected_type = drop_down(selected_type, subtypes, default_doc="Type to use with this value")
+        doc = "Type to use with this value"
+        changed_type, selected_type = drop_down(selected_type, subtypes, default_doc=doc, drop_flags=imgui.ComboFlags_.width_fit_preview)
         imgui.same_line()
         # Render sub-editor
         subeditor = self.subeditors[selected_type]

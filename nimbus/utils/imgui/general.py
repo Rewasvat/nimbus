@@ -103,7 +103,8 @@ def menu_item(title: str):
     return imgui.menu_item(title, "", False)[0]
 
 
-def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] = None, default_doc: str = None, flags: imgui.SelectableFlags_ = 0):
+def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] = None, default_doc: str = None,
+              drop_flags: imgui.ComboFlags_ = 0, item_flags: imgui.SelectableFlags_ = 0):
     """Renders a simple "drop-down" control for selecting a value amongst a list of possible options.
 
     This is a simple combo-box that lists the options and allows one to be selected.
@@ -117,16 +118,17 @@ def drop_down(value: str, options: list[str], docs: list[str] | dict[str, str] =
         * List: for any index, we get the value from options and its doc from here. If the list doesn't have the index, ``default_doc`` is used.
         default_doc (str, optional): Optional default docstring to use as tooltips for any option. If ``docs`` is None, and this is valid,
         this docstring will be used for all options.
-        flags (imgui.SelectableFlags_, optional): imgui Selectable flags for use in each value selectable.
+        drop_flags (imgui.ComboFlags_, optional): imgui Combo flags for the root combo-box of the dropdown.
+        item_flags (imgui.SelectableFlags_, optional): imgui Selectable flags for use in each value selectable.
 
     Returns:
         tuple[bool, str]: returns a ``(changed, new_value)`` tuple.
     """
     changed = False
     new_value = value
-    if imgui.begin_combo("##", value):
+    if imgui.begin_combo("##", value, flags=drop_flags):
         for i, option in enumerate(options):
-            if imgui.selectable(option, option == value, flags=flags)[0]:
+            if imgui.selectable(option, option == value, flags=item_flags)[0]:
                 changed = True
                 new_value = option
             if docs is not None:
