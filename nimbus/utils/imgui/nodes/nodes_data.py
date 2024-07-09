@@ -122,6 +122,8 @@ class DataPinState:
 # TODO: refatorar o getter `pin_tooltip`: do jeito que tá, ele faz um `get_value()` sempre. O problema nisso é que o NodePin faz um
 #   `if self.pin_tooltip` pra ver se precisa sequer tentar setar o tooltip. Então mesmo sem renderizar o tooltip o getter tá sendo
 #   executado EM CADA FRAME.
+# TODO: suportar update automatico da cor do pin de acordo com o tipo/editor do valor(state). Isso ajudaria com pins dinamicos que podem
+#   mudar de tipo, ou pins de unions tipo `int|float`
 class DataPin(NodePin):
     """A DataPin for nodes.
 
@@ -578,7 +580,7 @@ class DynamicInputSubPinState(DataPinState):
         name = f"{owner.name} #{len(owner.parent_pin._sub_pins)+1}"
         self.owner = owner
         super().__init__(name, owner.kind, owner.tooltip)
-        editor_config = owner.property.get_editor_config(owner.parent_node)
+        editor_config = owner.property.get_editor_config()
         self.setup_editor(config=editor_config)
 
     @property

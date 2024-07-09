@@ -1,7 +1,9 @@
 import re
+import math
 from nimbus.utils.imgui.actions.actions import Action, ActionColors
 from nimbus.utils.imgui.nodes import input_property, output_property, DataPin, DataPinState, PinKind
 from nimbus.utils.imgui.general import not_user_creatable
+from nimbus.utils.imgui.math import Vector2
 
 
 @not_user_creatable
@@ -13,24 +15,117 @@ class Operation(Action):
         self.node_header_color = ActionColors.Operations
 
 
-# TODO: suportar floats, ints, Vector2 ou Rects. De preferencia sem fazer actions diferentes pra cada tipo (investigar uso de union types)
 class Sum(Operation):
-    """Sum values together."""
+    """Sum values together.
+
+    Accepts ints, floats or Vector2s as inputs. However the result type depends on the inputs:
+    * If one of them is a Vector2, then the result will be a vector as well.
+    * Otherwise if one input is a float, the result will be a float.
+    * Otherwise all inputs would be ints, and thus the result will also be an integer.
+    """
 
     @input_property(dynamic_input_pins=True)
-    def values(self) -> list[float]:
+    def values(self) -> list[float | Vector2 | int]:
         """The values to sum"""
         return []
 
     @output_property(use_prop_value=True)
-    def result(self) -> float:
+    def result(self) -> float | Vector2 | int:
         """The result of the sum of our input values"""
-        return sum(self.values, 0.0)
+        vals = self.values
+        types = [type(v) for v in vals]
+        default = 0
+        if Vector2 in types:
+            default = Vector2()
+        elif float in types:
+            default = 0.0
+        return sum(vals, default)
 
 
-# TODO: subtraction action
-# TODO: multiply action
-# TODO: division action
+class Subtract(Operation):
+    """Subtract given values.
+
+    Accepts ints, floats or Vector2s as inputs. However the result type depends on the inputs:
+    * If one of them is a Vector2, then the result will be a vector as well.
+    * Otherwise if one input is a float, the result will be a float.
+    * Otherwise all inputs would be ints, and thus the result will also be an integer.
+    """
+
+    @input_property(dynamic_input_pins=True)
+    def values(self) -> list[float | Vector2 | int]:
+        """The values to subtract"""
+        return []
+
+    @output_property(use_prop_value=True)
+    def result(self) -> float | Vector2 | int:
+        """The result of the subtraction of our input values"""
+        vals = self.values
+        if len(vals) <= 0:
+            return 0.0
+        ret = vals[0]
+        for v in vals[1:]:
+            if isinstance(v, Vector2) and not isinstance(ret, Vector2):
+                ret = v - ret
+            else:
+                ret -= v
+        return ret
+
+
+class Multiply(Operation):
+    """Multiply given values.
+
+    Accepts ints, floats or Vector2s as inputs. However the result type depends on the inputs:
+    * If one of them is a Vector2, then the result will be a vector as well.
+    * Otherwise if one input is a float, the result will be a float.
+    * Otherwise all inputs would be ints, and thus the result will also be an integer.
+    """
+
+    @input_property(dynamic_input_pins=True)
+    def values(self) -> list[float | Vector2 | int]:
+        """The values to multiply"""
+        return []
+
+    @output_property(use_prop_value=True)
+    def result(self) -> float | Vector2 | int:
+        """The result of the multiplication of our input values"""
+        vals = self.values
+        if len(vals) <= 0:
+            return 0.0
+        ret = vals[0]
+        for v in vals[1:]:
+            if isinstance(v, Vector2) and not isinstance(ret, Vector2):
+                ret = v * ret
+            else:
+                ret *= v
+        return ret
+
+
+class Divide(Operation):
+    """Performs division between A and B.
+
+    Notes:
+    * If the divisor is 0, the result will be a ``nan``.
+    * If the divisor is a Vector2, but the dividend isn't, then the result will be a ``nan``.
+    """
+
+    @input_property()
+    def dividend(self) -> float | Vector2 | int:
+        """The division's dividend."""
+
+    @input_property()
+    def divisor(self) -> float | Vector2 | int:
+        """The division's divisor."""
+
+    @output_property(use_prop_value=True)
+    def result(self) -> float | Vector2 | int:
+        """The resulting division's quotient."""
+        if self.divisor == 0:
+            return math.nan
+        if isinstance(self.divisor, Vector2):
+            if not isinstance(self.dividend, Vector2) or self.divisor.x == 0 or self.divisor.y == 0:
+                return math.nan
+        return self.dividend / self.divisor
+
 
 class Concatenate(Operation):
     """Concatenate various strings together.
