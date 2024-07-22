@@ -119,9 +119,6 @@ class DataPinState:
 
 
 # TODO: permitir tipo generic (qualquer coisa), consegue linkar com qualquer outro DataPin
-# TODO: refatorar o getter `pin_tooltip`: do jeito que tá, ele faz um `get_value()` sempre. O problema nisso é que o NodePin faz um
-#   `if self.pin_tooltip` pra ver se precisa sequer tentar setar o tooltip. Então mesmo sem renderizar o tooltip o getter tá sendo
-#   executado EM CADA FRAME.
 # TODO: suportar update automatico da cor do pin de acordo com o tipo/editor do valor(state). Isso ajudaria com pins dinamicos que podem
 #   mudar de tipo, ou pins de unions tipo `int|float`
 class DataPin(NodePin):
@@ -157,19 +154,6 @@ class DataPin(NodePin):
     @pin_tooltip.setter
     def pin_tooltip(self, value: str):
         self._pin_tooltip = value
-
-    def draw_node_pin_contents(self):
-        draw = imgui.get_window_draw_list()
-        size = imgui.get_text_line_height()
-        center = Vector2.from_cursor_screen_pos() + (size * 0.5, size * 0.5)
-        radius = size * 0.3
-        color = imgui.get_color_u32(self.default_link_color)
-        if self.is_linked_to_any():
-            draw.add_circle_filled(center, radius, color)
-        else:
-            thickness = 2
-            draw.add_circle(center, radius, color, thickness=thickness)
-        imgui.dummy((size, size))
 
     @property
     def accepted_input_types(self) -> type | types.types.UnionType | tuple[type]:
@@ -556,7 +540,7 @@ class DynamicInputState(DataPropertyState):
         return [substate.parent_pin.get_value() for substate in self.parent_pin._sub_pins]
 
     def correct_value(self, value):
-        # TODO: this is kind of a workaround. We represent what should be a list-like value. But our type()
+        # NOTE: this is kind of a workaround. We represent what should be a list-like value. But our type()
         #   returns the internal type, so our editor would try to fix the value-type to the wrong type and crash.
         return self.get()
 

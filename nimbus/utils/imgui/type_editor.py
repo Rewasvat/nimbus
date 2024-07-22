@@ -10,7 +10,6 @@ from nimbus.utils.imgui.general import enum_drop_down, drop_down
 from nimbus.utils.utils import get_all_properties, AdvProperty, adv_property
 
 
-# TODO: support type identifiers that are not type objects themselves. Like `list[str]` type hints and so on.
 class TypeDatabase(metaclass=cmd_utils.Singleton):
     """Database of Python Types and their TypeEditors for visualization and editing of values in IMGUI.
 

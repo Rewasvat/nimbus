@@ -448,7 +448,7 @@ PinKind = imgui_node_editor.PinKind
 """Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
 
 
-# TODO: ter default pin content?
+# TODO: highlight pins (across all nodes) that can be connected to when pulling a new link.
 class NodePin:
     """An Input or Output Pin in a Node.
 
@@ -497,19 +497,31 @@ class NodePin:
             imgui.text_unformatted(name)
 
         imgui.end_horizontal()
-        if self.pin_tooltip:
-            imgui_node_editor.suspend()
-            imgui.set_item_tooltip(self.pin_tooltip)
-            imgui_node_editor.resume()
+        imgui_node_editor.suspend()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.for_tooltip) and self.pin_tooltip:
+            imgui.set_tooltip(self.pin_tooltip)
+        imgui_node_editor.resume()
         imgui_node_editor.end_pin()
 
     def draw_node_pin_contents(self):
         """Draws the pin's contents: icon, label, etc.
 
         The area available for drawing the pin's contents is usually limited, and is horizontally aligned.
-        Implementations should override this method to define their drawing logic - default implementation raises an error.
+
+        Implementations can override this method to change their pin's drawing logic - default implementation draws a "Data Pin circle":
+        a small circle that is filled if it has at least one link, and is painted the same default_link_color as the pin.
         """
-        raise NotImplementedError
+        draw = imgui.get_window_draw_list()
+        size = imgui.get_text_line_height()
+        center = Vector2.from_cursor_screen_pos() + (size * 0.5, size * 0.5)
+        radius = size * 0.3
+        color = self.default_link_color.u32
+        if self.is_linked_to_any():
+            draw.add_circle_filled(center, radius, color)
+        else:
+            thickness = 2
+            draw.add_circle(center, radius, color, thickness=thickness)
+        imgui.dummy((size, size))
 
     def get_all_links(self) -> list['NodeLink']:
         """Gets all links connected to this pin."""
