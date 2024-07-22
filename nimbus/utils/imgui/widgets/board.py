@@ -69,7 +69,7 @@ class Board(ContainerWidget):
 
     def on_slots_changed(self):
         if self._selected_name not in self.boards:
-            self._selected_name = self.boards[0] if len(self.boards[0]) > 0 else ""
+            self._selected_name = self.boards[0] if len(self.boards) > 0 else ""
         self.selected_name = self._selected_name  # to update enabled slots.
 
     def _update_selected_name_editor(self, editor: types.EnumEditor):

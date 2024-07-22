@@ -177,6 +177,10 @@ class Vector2(ImVec2):
         """
         return {"x": self.x, "y": self.y}
 
+    def aspect_ratio(self):
+        """Returns the aspect-ratio of this vector: ``X / Y``"""
+        return self.x / self.y
+
     @classmethod
     def from_angle(cls, angle: float):
         """Returns a unit-vector based on the given ANGLE (in radians)."""

@@ -13,6 +13,15 @@ class Color(ImVec4):
         """Gets this color as a ImU32 value, used by some low-level imgui API, such as DrawLists."""
         return imgui.get_color_u32(self)
 
+    @property
+    def a(self):
+        """The ALPHA component of the color, same as ``self.w``."""
+        return self.w
+
+    @a.setter
+    def a(self, value: float):
+        self.w = value
+
     def clamp(self):
         """Ensures the components of this Color are in the expected [0, 1] range."""
         self.x = max(0, min(1, self.x))
@@ -81,6 +90,14 @@ class Color(ImVec4):
         self.y = state.get("y", 0)
         self.z = state.get("z", 0)
         self.w = state.get("w", 0)
+
+    def copy(self):
+        """Returns a copy of this color."""
+        return self.__class__(self.x, self.y, self.z, self.w)
+
+    def alpha_copy(self, a: float = 1.0):
+        """Returns a copy of this color, but with the given alpha value"""
+        return self.__class__(self.x, self.y, self.z, a)
 
 
 class ColorsClass:

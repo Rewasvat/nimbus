@@ -70,14 +70,8 @@ class MonitorApp(windows.AppWindow):
     It opens a GUI that shows the state of the system's sensors, allowing the user to configure
     how to see them, amongst other things.
     """
-    # TODO: feature pra user poder "criar" seu sensor:
-    #   - podendo juntar valores de sensores diferentes, pra juntar values com algum calculo, tipo média por exemplo
-    #   - talvez algo de poder pegar um "sensor" do user? algo pra dar query em algo do user?
-    #   * user poderia definir/criar esses custom sensors, e ai usar eles normalmente no Monitor, como se fosse um sensor como os outros.
-    # TODO: ter modo de "user custom layout", onde user define quais widgets (com quais sensores) vai aparecer (seria tipo a UI do LCARS)
     # TODO: poder mudar tema pra LCARS
     # TODO: arrumar uso da interface (UI do IMGUI) com touch no monitor touch
-    # TODO: arrumar save dos settings da imgui: parece que não ta salvando mudancas de theme, config das colunas da table, e mais umas coisinhas assim
 
     def __init__(self):
         super().__init__("System Monitor", windows.RunnableAppMode.SIMPLE)
@@ -280,6 +274,9 @@ class MonitorApp(windows.AppWindow):
 #   - permitir user criar/deletar system (ao deletar um system, reciclar todos nodes/pins/links)
 #   - deixar só um system carregado por vez. (vai precisar de algum delete()/clear() no WidgetSystem pra deletar todos seus nodes,
 #     pros Sensores limpares os InternalSensor...)
+#   - isso pode casar com a idéia de ter um Node que roda um graph internamente, pra poder separar coisas em grafos diferentes.
+#     então ai probs seria numa classe-singleton a parte... e melhor pensar melhor nisso.
+#       - poderia ter problemas com SensorNodes por exemplo, já que atualmente só pode existir 1 deles por sensor-ID
 class WidgetsTestApp(windows.AppWindow):
     """TODO teste pro sistema de Widgets, talvez deletar depois?"""
 
@@ -299,6 +296,7 @@ class WidgetsTestApp(windows.AppWindow):
         self.system.render()
 
     def on_init(self):
+        super().on_init()
         sensors.ComputerSystem().open()
         from nimbus.utils.imgui.widgets import WidgetSystem
         self.system = WidgetSystem.load_from_cache("Test")

@@ -180,7 +180,7 @@ class WidgetSystem:
             WidgetSystem: the loaded (or created) WidgetSystem instance.
         """
         cache = DataCache()
-        system: WidgetSystem = cache.get_custom_cache(f"WidgetSystem_{name}")
+        system = cache.get_custom_cache(f"WidgetSystem_{name}")
         if system is None:
             system = cls(name)
         return system
