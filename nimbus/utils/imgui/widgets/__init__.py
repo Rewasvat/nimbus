@@ -18,3 +18,6 @@ from nimbus.utils.imgui.widgets.label import Label
 from nimbus.utils.imgui.widgets.corner import Corner
 from nimbus.utils.imgui.widgets.button import Button
 from nimbus.utils.imgui.widgets.progressbar import ProgressBar
+
+# LCARS
+import nimbus.utils.imgui.widgets.lcars
