@@ -99,6 +99,22 @@ class Color(ImVec4):
         """Returns a copy of this color, but with the given alpha value"""
         return self.__class__(self.x, self.y, self.z, a)
 
+    @classmethod
+    def from_hex(cls, hexstr: str, use_argb=False):
+        """Creates a Color object from a RGBA hex string.
+
+        Args:
+            hexstr (str): RGBA string to convert (case-insensitive).
+            use_argb (bool, optional): If true, the ``hexstr`` will be read as a ARGB string.
+
+        Returns:
+            Color: the new Color object.
+        """
+        r, g, b, a = [int(hexstr[i:i+2], 16)/255 for i in range(0, len(hexstr), 2)]
+        if use_argb:
+            a, r, g, b = r, g, b, a
+        return cls(r, g, b, a)
+
 
 class ColorsClass:
     @property

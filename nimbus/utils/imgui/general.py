@@ -266,8 +266,5 @@ def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
 # ============== LCARS Only: (?)
 # TODO: [widget] Communicator: que me lembro, eram puramente visuais (e com animação...)
 # TODO: [widget] MainControls: que me lembro, era uma coleção de vários botões em formatos diferentes.
-# TODO: [widget] RedAlert: que me lembro, eram puramente visuais (e com animação...)
-# TODO: [widget] YellowAlert: que me lembro, eram puramente visuais (e com animação...)
 # TODO: [widget] ReactorBar: seriam 2 sensores, meio que 2 ProgressBars juntas.
 # TODO: [widget] WavesBar: seriam 2 sensores, meio que 2 ProgressBars juntas.
-# TODO: [widget] SFCM (?)

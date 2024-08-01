@@ -348,6 +348,16 @@ class XAMLPath:
         for shape in self.shapes:
             shape.render(pos, size, color)
 
+    def reverse(self):
+        """Reverses the drawing order of all shapes contained in this path.
+
+        When drawing primitive polygons with imgui, the vertices need to be drawn in clockwise order, otherwise
+        the resulting drawn polygone will just be wrong. Using this method allows you to easily change
+        the drawing order and thus fix this issue, in case the path was defined with anticlockwise points/segments.
+        """
+        for shape in self.shapes:
+            shape.reverse()
+
 
 class XAMLShape:
     """Represents a single shape/polygon from a XAML path-data string.
@@ -396,6 +406,19 @@ class XAMLShape:
             segment.render(pos, size)
         draw.path_fill_concave(color.u32)
 
+    def reverse(self):
+        """Reverses the drawing order of this polygon's vertices, by reverting all our segments.
+
+        When drawing primitive polygons with imgui, the vertices need to be drawn in clockwise order, otherwise
+        the resulting drawn polygone will just be wrong. Using this method allows you to easily change
+        the drawing order and thus fix this issue, in case the path was defined with anticlockwise points/segments.
+        """
+        self.segments.reverse()
+        prev_point = self.initial_point
+        for seg in reversed(self.segments):
+            prev_point = seg.reverse(prev_point)
+        self.initial_point = prev_point
+
 
 class XAMLLine:
     """A single line segment for a ``XAMLShape`` object.
@@ -418,6 +441,24 @@ class XAMLLine:
         draw = imgui.get_window_draw_list()
         p = pos + size * self.point
         draw.path_line_to(p)
+
+    def reverse(self, prev_starting: Vector2):
+        """Reverts the drawing order of this polygon segment.
+
+        When drawing primitive polygons with imgui, the vertices need to be drawn in clockwise order, otherwise
+        the resulting drawn polygone will just be wrong. Using this method allows you to easily change
+        the drawing order and thus fix this issue, in case the path was defined with anticlockwise points/segments.
+
+        Args:
+            prev_starting (Vector2): the starting (or previous) point of this segment in the Shape it belongs to,
+            before reversing.
+
+        Returns:
+            Vector2: our old ending point. This point should now be the starting point of this segment.
+        """
+        old_point = self.point
+        self.point = prev_starting
+        return old_point
 
 
 class XAMLCurve:
@@ -446,6 +487,25 @@ class XAMLCurve:
         c2 = pos + size * self.control2
         end = pos + size * self.end
         draw.path_bezier_cubic_curve_to(c1, c2, end)
+
+    def reverse(self, prev_starting: Vector2):
+        """Reverts the drawing order of this polygon segment.
+
+        When drawing primitive polygons with imgui, the vertices need to be drawn in clockwise order, otherwise
+        the resulting drawn polygone will just be wrong. Using this method allows you to easily change
+        the drawing order and thus fix this issue, in case the path was defined with anticlockwise points/segments.
+
+        Args:
+            prev_starting (Vector2): the starting (or previous) point of this segment in the Shape it belongs to,
+            before reversing.
+
+        Returns:
+            Vector2: our old ending point. This point should now be the starting point of this segment.
+        """
+        self.control1, self.control2 = self.control2, self.control1
+        old_end = self.end
+        self.end = prev_starting
+        return old_end
 
 
 class Animation:
