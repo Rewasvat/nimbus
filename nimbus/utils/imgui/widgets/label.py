@@ -67,22 +67,33 @@ class TextObject:
             wrap_width = self.area.size.x if self.wrapped else 0
 
             font_size = self.calculate_font_size(lines, wrap_width)
+            if self.debug_draw_boxes:
+                self.area.draw(Colors.blue)
 
             font_db = FontDatabase()
             # Second pass to render the text with proper font size.
             with font_db.using_font(font_size, self.font) as font:
-                self._text_rect, line_rects = self.get_text_rects(lines, wrap_width)
+                # Since fonts have a maximum possible size, we might still need to scale.
+                font_scale = (font_size / font.font_size) * (font_size / int(font_size))
+                self._text_rect, line_rects = self.get_text_rects(lines, wrap_width, font_scale)
 
                 draw = imgui.get_window_draw_list()
                 if self.debug_draw_boxes:
-                    draw.add_rect(self.text_area.position, self.text_area.bottom_right_pos, Colors.green.u32)
+                    self.text_area.draw(Colors.green)
                 for line, line_rect in zip(lines, line_rects):
                     if self.debug_draw_boxes:
-                        draw.add_rect(line_rect.position, line_rect.bottom_right_pos, Colors.red.u32)
+                        # Individual line rect. Tight glyph fit, the desired size.
+                        line_rect.draw(Colors.red)
+                        # How the line rect would be if we didn't fix it to tightly fit.
+                        fpos = line_rect.position
+                        fsize = line_rect.size
+                        fpos -= font_db.get_text_pos_fix(font, self.font) * font_scale
+                        fsize += font_db.get_text_size_fix(font, self.font) * font_scale
+                        draw.add_rect(fpos, fpos + fsize, Colors.yellow.u32)
                     draw.add_text(
                         font=font,
                         font_size=font_size,
-                        pos=line_rect.position,
+                        pos=line_rect.position - font_db.get_text_pos_fix(font, self.font) * font_scale,  # NOTE: text rect Ypos fix for font
                         col=self.color.u32,
                         text_begin=line,
                         text_end=None,
@@ -138,7 +149,7 @@ class TextObject:
 
         return self.current_font_size
 
-    def get_text_rects(self, lines: list[str], wrap_width=0):
+    def get_text_rects(self, lines: list[str], wrap_width=0, scale=1):
         """Calculates the text rectangles (position and size) for each of the given text lines, according to our
         current area and text alignment.
 
@@ -148,18 +159,21 @@ class TextObject:
         Args:
             lines (list[str]): list of text lines to calculate rects from.
             wrap_width (int, optional): wrap width to use when calculating text sizes. Defaults to 0.
+            scale (float, optional): text scale to use. Defaults to 1.
 
         Returns:
             tuple[Rectangle, list[Rectangle]]: a tuple with two values, in order:
             * ``Rectangle``: the total text rectangle - the position/size rectangle of all lines together.
             * ``list[Rectangle]``: the individual rectangle for each line (matching indexes to the lines arg).
         """
+        font_db = FontDatabase()
         line_rects: list[Rectangle] = []
         for line in lines:
             y = line_rects[-1].bottom_left_pos.y if len(line_rects) > 0 else 0
-            line_rect = Rectangle((0, y), imgui.calc_text_size(line, wrap_width=wrap_width))
-            line_rects.append(line_rect)
-        text_rect = self.update_line_rects(line_rects, 1)
+            line_size = imgui.calc_text_size(line, wrap_width=wrap_width)
+            line_size.y -= font_db.get_text_size_fix(font=self.font).y  # NOTE: text rect height fix for font
+            line_rects.append(Rectangle((0, y), line_size))
+        text_rect = self.update_line_rects(line_rects, scale)
         return text_rect, line_rects
 
     def update_line_rects(self, line_rects: list[Rectangle], scale: float):

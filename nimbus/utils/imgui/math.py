@@ -1,5 +1,6 @@
 import math
 from imgui_bundle import imgui, ImVec2, ImVec4
+from nimbus.utils.imgui.colors import Color, Colors
 
 
 class Vector2(ImVec2):
@@ -292,6 +293,27 @@ class Rectangle:
         """
         self._pos -= amount
         self._size += amount * 2  # x2 to compensante for position receding, and the expected amount increase.
+
+    def draw(self, color: Color = Colors.white, is_filled=False, thickness=1.0, rounding=0.0, flags: imgui.ImDrawFlags_ = 0,
+             draw: imgui.ImDrawList = None):
+        """Draws this rectangle using IMGUI.
+
+        Args:
+            color (Color, optional): Color to use. Defaults to white.
+            is_filled (bool, optional): If the rect will be filled or not. Defaults to False.
+            thickness (float, optional): Thickness of the drawn rectangle stroke. Used when rectangle is not filled. Defaults to 1.0.
+            rounding (float, optional): Corner rounding amount. Max value is ``self.size.min_component()*0.5``. Specific ``flags``
+            are required to define which corners will be rounded. Defaults to 0.0.
+            flags (imgui.ImDrawFlags_, optional): Imgui DrawList Flags to use when drawing the rectangle. Defaults to none (0).
+            draw (imgui.ImDrawList, optional): Which Imgui DrawList to use to draw the rectangle. If None, will
+            default to using ``imgui.get_window_draw_list()``.
+        """
+        if draw is None:
+            draw = imgui.get_window_draw_list()
+        if is_filled:
+            draw.add_rect_filled(self._pos, self.bottom_right_pos, color.u32, rounding, flags)
+        else:
+            draw.add_rect(self._pos, self.bottom_right_pos, color.u32, rounding, flags, thickness)
 
     def __str__(self):
         return f"Rectangle({self._pos.x}, {self._pos.y}, {self._size.x}, {self._size.y})"

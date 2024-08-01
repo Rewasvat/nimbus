@@ -84,17 +84,17 @@ class Alert(LeafWidget):
         #   e ai usar esse bounding-rect aqui pra pegar esses pontos dinamicamente
         p1 = pos + Vector2(121.485, 227.990) * self._xaml_scale * size  # top-right corner of left-block, position fixed to slot
         p2 = pos + Vector2(609.455, 354.320) * self._xaml_scale * size  # bottom-left corner of right-block, position fixed to slot
-        full_area = p2 - p1
+        # draw.add_rect(p1, p2, Colors.magenta.u32)
 
-        large_pos = p1.copy() - (0, full_area.y*0.12)
-        large_area = (p2 + (full_area.x*0.005, 0)) - large_pos
+        large_pos = p1.copy()
+        large_area = p2 - large_pos
         self._large_text.area.position = large_pos
         self._large_text.area.size = large_area
         self._large_text.draw()
         self.text_animation.update(self._large_text.color)
 
         small_pos = self._large_text.text_area.bottom_left_pos
-        small_area = (p2 + (0, full_area.y*0.05)) - small_pos
+        small_area = p2 - small_pos
         self._small_text.area.position = small_pos
         self._small_text.area.size = small_area
         self._small_text.draw()

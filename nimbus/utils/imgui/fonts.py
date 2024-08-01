@@ -1,4 +1,5 @@
 import nimbus.utils.command_utils as cmd_utils
+from nimbus.utils.imgui.math import Vector2
 from contextlib import contextmanager
 from imgui_bundle import imgui
 from imgui_bundle import hello_imgui  # type: ignore
@@ -77,6 +78,18 @@ class FontCache:
             self.fonts[size] = font
         self.loading_fonts.clear()
 
+    def is_font_ours(self, imfont: imgui.ImFont):
+        """Checks if the given ImFont is one of the fonts generated (and stored) by this FontCache object.
+
+        Args:
+            imfont (imgui.ImFont): font to check
+
+        Returns:
+            bool: if imfont is one of ours.
+        """
+        stashed_font = self.fonts.get(int(imfont.font_size), None)
+        return stashed_font == imfont
+
 
 class FontDatabase(metaclass=cmd_utils.Singleton):
     """Singleton database of fonts to use with IMGUI.
@@ -144,3 +157,82 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
         imgui.push_font(imfont)
         yield imfont
         imgui.pop_font()
+
+    def get_cache_for_font(self, imfont: imgui.ImFont = None):
+        """Gets our internal FontCache object that owns the given ImFont.
+
+        Args:
+            imfont (imgui.ImFont, optional): The ImFont to check. If None (the default), will get imgui's current font.
+
+        Returns:
+            FontCache: our internal FontCache object or None.
+        """
+        if imfont is None:
+            imfont = imgui.get_font()
+        for cache in self.fonts.values():
+            if cache.is_font_ours(imfont):
+                return cache
+
+    def get_text_pos_fix(self, imfont: imgui.ImFont = None, font: Fonts = None):
+        """Gets the text position fix for the given ImFont.
+
+        When calculating text-size with ``imgui.calc_text_size(txt)``, the given size is a bounding rect of that text
+        when rendered. However, depending on font (TTF) config, there can empty spaces at the top and bottom of this
+        rect and the text glyphs inside. If you want to draw text with glyphs tightly fitted to a bounding rect, then
+        these spaces become a problem.
+
+        This function calculates the position offset of a ImFont. Using this offset in the position of the bounding
+        rect will "fix" it so that the glyphs are tightly fitted. Use it with subtraction: ``final_pos=base_pos - this_offset``.
+        Also see ``self.get_text_size_fix()`` in order to also fix the text's size to tightly fit glyphs.
+
+        Args:
+            imfont (imgui.ImFont, optional): The ImFont to use. If None (the default), will use imgui's current font.
+            font (Fonts, optional): Which Fonts enum to use. This should be the Fonts associated with the given ImFont.
+            If None (the default), will try to get the Fonts from the given ImFont.
+
+        Returns:
+            Vector2: position offset to tightly fit glyphs
+        """
+        if imfont is None:
+            imfont = imgui.get_font()
+        if font is None:
+            cache = self.get_cache_for_font(imfont)
+            if not cache:
+                return Vector2()
+            font = cache.font
+        if font is Fonts.LCARS_WIDE:
+            return Vector2(0, abs(imfont.descent))
+        else:
+            return Vector2(0, abs(imfont.descent) * 2)
+
+    def get_text_size_fix(self, imfont: imgui.ImFont = None, font: Fonts = None):
+        """Gets the text size fix for the given ImFont.
+
+        When calculating text-size with ``imgui.calc_text_size(txt)``, the given size is a bounding rect of that text
+        when rendered. However, depending on font (TTF) config, there can empty spaces at the top and bottom of this
+        rect and the text glyphs inside. If you want to draw text with glyphs tightly fitted to a bounding rect, then
+        these spaces become a problem.
+
+        This function calculates the size of these empty-spaces of a ImFont. Using this size offset in the size of the bounding
+        rect will "fix" it so that the glyphs are tightly fitted. Use it with subtraction: ``final_size=base_size - this_size_fix``.
+        Also see ``self.get_text_pos_fix()`` in order to also fix the text's position to tightly fit glyphs.
+
+        Args:
+            imfont (imgui.ImFont, optional): The ImFont to use. If None (the default), will use imgui's current font.
+            font (Fonts, optional): Which Fonts enum to use. This should be the Fonts associated with the given ImFont.
+            If None (the default), will try to get the Fonts from the given ImFont.
+
+        Returns:
+            Vector2: size diff of the empty spaces of a ImFont to tightly fit glyphs
+        """
+        if imfont is None:
+            imfont = imgui.get_font()
+        if font is None:
+            cache = self.get_cache_for_font(imfont)
+            if not cache:
+                return Vector2()
+            font = cache.font
+        if font is Fonts.LCARS_WIDE:
+            return Vector2(0, abs(imfont.descent) * 2)
+        else:
+            return Vector2(0, abs(imfont.descent) * 3)
