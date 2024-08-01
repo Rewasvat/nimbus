@@ -3,12 +3,19 @@ from contextlib import contextmanager
 from imgui_bundle import imgui
 from imgui_bundle import hello_imgui  # type: ignore
 from enum import Enum
+from typing import Generator
 
 
 class Fonts(Enum):
     """Available fonts to use with FontDatabase and the Widgets system."""
     LCARS = "Antonio-Regular"
     LCARS_WIDE = "Federation_Wide"
+    LCARS_BOLD = "Antonio-Bold"
+    LCARS_SEMI_BOLD = "Antonio-SemiBold"
+    LCARS_MEDIUM = "Antonio-Medium"
+    LCARS_LIGHT = "Antonio-Light"
+    LCARS_EXTRA_LIGHT = "Antonio-ExtraLight"
+    LCARS_THIN = "Antonio-Thin"
 
 
 # TODO: check bug: aparentemente carregar font MTO grande crasha.
@@ -40,6 +47,20 @@ class FontCache:
             returned font might be the wrong one: it'll be a default font instead.
         """
         size = int(size)
+
+        # imgui_freetype.cpp has malloc chunk_size of 256*1024 bytes when allocating glyphs texture size
+        # A glyph_size is width*height*4 bytes. Here we have the height (size), and assume width=height for simplification.
+        # If, when allocating a new glyph, the current_size + glyph_size exceeds the chunk_size, the current_size is
+        # cleared and a new chunk is allocated. If after this the glyph_size still exceeds the chunk_size, it crashes.
+        # This is happening here with exceedingly large font sizes. It could be fixed at the imgui_freetype level by
+        # allocating custom sized chunks, but for now they don't do that.
+        #
+        # Workaround is to limit the font size. Larger than this, TextObject should scale the text.
+        # Based on our width assumption, the maximum font-size is 'sqrt(chunk_size/4)'. Since chunk_size is unfortunately
+        # fixed, the max_size is ~256 units. We use max_size a little less than that here as a failsafe.
+        max_size = 230
+        size = min(max_size, size)
+
         if size in self.fonts:
             return self.fonts[size], True
         font = imgui.get_font()
@@ -102,7 +123,7 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
             cache.load_fonts()
 
     @contextmanager
-    def using_font(self, size: int = 16, font: Fonts = Fonts.LCARS):
+    def using_font(self, size: int = 16, font: Fonts = Fonts.LCARS) -> Generator[imgui.ImFont, None, None]:
         """Context manager to use a specific sized font with IMGUI.
 
         The request font will be pushed to imgui's stack (``push_font``), then this method will
