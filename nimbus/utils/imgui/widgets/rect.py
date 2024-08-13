@@ -3,6 +3,31 @@ from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.nodes import input_property
 from imgui_bundle import imgui
+from enum import Flag
+
+
+class RectCorners(Flag):
+    """Corners of the Rectangle that should be rounded.
+
+    This is a FLAG enumeration, so multiple values can be aggregated with ``|``.
+    """
+    NONE = imgui.ImDrawFlags_.round_corners_none.value
+    TOP_LEFT = imgui.ImDrawFlags_.round_corners_top_left.value
+    TOP_RIGHT = imgui.ImDrawFlags_.round_corners_top_right.value
+    BOTTOM_RIGHT = imgui.ImDrawFlags_.round_corners_bottom_right.value
+    BOTTOM_LEFT = imgui.ImDrawFlags_.round_corners_bottom_left.value
+    TOP = TOP_LEFT | TOP_RIGHT
+    BOTTOM = BOTTOM_LEFT | BOTTOM_RIGHT
+    RIGHT = TOP_RIGHT | BOTTOM_RIGHT
+    LEFT = TOP_LEFT | BOTTOM_LEFT
+    ALL = TOP_LEFT | TOP_RIGHT | BOTTOM_LEFT | BOTTOM_RIGHT
+
+    def get_flags(self) -> imgui.ImDrawFlags_:
+        """Gets the value of this RectCorners enum object as a imgui ImDrawFlags value (int)."""
+        val = self.value
+        if val == 0:
+            val = RectCorners.NONE.value
+        return val
 
 
 # TODO: alterar cor de acordo com hovered (clicked talvez? ou só no button?).
@@ -13,10 +38,7 @@ class RectMixin:
         if color:
             self.color = color
         self._rounding: float = 0.0
-        self._is_top_left_round = False
-        self._is_top_right_round = False
-        self._is_bottom_right_round = False
-        self._is_bottom_left_round = False
+        self._corners: RectCorners = RectCorners.NONE
 
     @input_property()
     def color(self) -> Color:
@@ -36,41 +58,14 @@ class RectMixin:
     def rounding(self, value: float):
         self._rounding = value
 
-    @types.bool_property()
-    def is_top_left_round(self):
-        """If the top-left corner is rounded. [GET/SET]"""
-        return self._is_top_left_round
+    @types.enum_property()
+    def corners(self) -> RectCorners:
+        """Which corners to round on this rect. [GET/SET]"""
+        return self._corners
 
-    @is_top_left_round.setter
-    def is_top_left_round(self, value: bool):
-        self._is_top_left_round = value
-
-    @types.bool_property()
-    def is_top_right_round(self):
-        """If the top-right corner is rounded. [GET/SET]"""
-        return self._is_top_right_round
-
-    @is_top_right_round.setter
-    def is_top_right_round(self, value: bool):
-        self._is_top_right_round = value
-
-    @types.bool_property()
-    def is_bottom_right_round(self):
-        """If the bottom-right corner is rounded. [GET/SET]"""
-        return self._is_bottom_right_round
-
-    @is_bottom_right_round.setter
-    def is_bottom_right_round(self, value: bool):
-        self._is_bottom_right_round = value
-
-    @types.bool_property()
-    def is_bottom_left_round(self):
-        """If the bottom-left corner is rounded. [GET/SET]"""
-        return self._is_bottom_left_round
-
-    @is_bottom_left_round.setter
-    def is_bottom_left_round(self, value: bool):
-        self._is_bottom_left_round = value
+    @corners.setter
+    def corners(self, value: RectCorners):
+        self._corners = value
 
     @property
     def actual_rounding(self):
@@ -82,25 +77,7 @@ class RectMixin:
     def _draw_rect(self):
         """Internal utility to render our rectangle."""
         draw = imgui.get_window_draw_list()
-        flags = self._get_draw_flags()
-        draw.add_rect_filled(self.position, self.bottom_right_pos, self.color.u32, self.actual_rounding, flags)
-
-    def _get_draw_flags(self):
-        """Gets the imgui ImDrawFlags for our rectangle drawing according to our attributes.
-
-        Returns:
-            imgui.ImDrawFlags: drawing flags
-        """
-        flags = imgui.ImDrawFlags_.round_corners_none
-        if self._is_top_left_round:
-            flags |= imgui.ImDrawFlags_.round_corners_top_left
-        if self._is_top_right_round:
-            flags |= imgui.ImDrawFlags_.round_corners_top_right
-        if self._is_bottom_right_round:
-            flags |= imgui.ImDrawFlags_.round_corners_bottom_right
-        if self._is_bottom_left_round:
-            flags |= imgui.ImDrawFlags_.round_corners_bottom_left
-        return flags
+        draw.add_rect_filled(self.position, self.bottom_right_pos, self.color.u32, self.actual_rounding, self.corners.get_flags())
 
 
 class Rect(RectMixin, LeafWidget):
