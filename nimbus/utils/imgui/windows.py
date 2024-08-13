@@ -68,6 +68,7 @@ class RunnableAppMode(str, Enum):
     """
 
 
+# TODO: investigar/suportar borderless window. Isso talvez fique melhor pro visual do LCARS.
 class AppWindow(BasicWindow):
     """Base 'App' window.
 

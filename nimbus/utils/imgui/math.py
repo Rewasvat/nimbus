@@ -162,6 +162,14 @@ class Vector2(ImVec2):
         """
         return min(*self)
 
+    def swap_axis(self):
+        """Swaps the X and Y components of this vector with each other in-place."""
+        self.x, self.y = self.y, self.x
+
+    def swapped_axis(self):
+        """Returns a new Vector2 object with the same values as this one, but with the X and Y axis swapped with each other."""
+        return self.__class__(self.y, self.x)
+
     def as_tuple(self):
         """Converts this vector to a (X, Y) floats tuple.
 
@@ -294,6 +302,27 @@ class Rectangle:
         self._pos -= amount
         self._size += amount * 2  # x2 to compensante for position receding, and the expected amount increase.
 
+    def get_inner_rect(self, aspect_ratio: float, margin=0.0):
+        """Gets a rect totally contained within this one, but with the given fixed aspect ratio.
+
+        Args:
+            aspect_ratio (float): The desired aspect ratio (``width/height``, or see ``Vector2.aspect_ratio()``) of the inner rect.
+            margin (float, optional): Optional margin of the returned inner rect to this rect. The margin value is used to space all sides.
+            Defaults to 0.0.
+
+        Returns:
+            Rectangle: the largest rectangle with the given aspect-ratio possible inside this one (with the given margin).
+        """
+        base_pos = self._pos + margin
+        base_size = self._size - margin * 2
+        if base_size.y * aspect_ratio > base_size.x:
+            size = Vector2(base_size.x, base_size.x / aspect_ratio)
+            pos = base_pos + (0, (base_size.y - size.y) * 0.5)
+        else:
+            size = Vector2(base_size.y * aspect_ratio, base_size.y)
+            pos = base_pos + ((base_size.x - size.x) * 0.5, 0)
+        return Rectangle(pos, size)
+
     def draw(self, color: Color = Colors.white, is_filled=False, thickness=1.0, rounding=0.0, flags: imgui.ImDrawFlags_ = 0,
              draw: imgui.ImDrawList = None):
         """Draws this rectangle using IMGUI.
@@ -302,10 +331,10 @@ class Rectangle:
             color (Color, optional): Color to use. Defaults to white.
             is_filled (bool, optional): If the rect will be filled or not. Defaults to False.
             thickness (float, optional): Thickness of the drawn rectangle stroke. Used when rectangle is not filled. Defaults to 1.0.
-            rounding (float, optional): Corner rounding amount. Max value is ``self.size.min_component()*0.5``. Specific ``flags``
-            are required to define which corners will be rounded. Defaults to 0.0.
+            rounding (float, optional): Corner rounding amount. Max value is ``self.size.min_component()*0.5``. Specific ``flags`` are \
+                required to define which corners will be rounded. Defaults to 0.0.
             flags (imgui.ImDrawFlags_, optional): Imgui DrawList Flags to use when drawing the rectangle. Defaults to none (0).
-            draw (imgui.ImDrawList, optional): Which Imgui DrawList to use to draw the rectangle. If None, will
+            draw (imgui.ImDrawList, optional): Which Imgui DrawList to use to draw the rectangle. If None, will \
             default to using ``imgui.get_window_draw_list()``.
         """
         if draw is None:

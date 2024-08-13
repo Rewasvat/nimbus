@@ -19,8 +19,6 @@ class Fonts(Enum):
     LCARS_THIN = "Antonio-Thin"
 
 
-# TODO: check bug: aparentemente carregar font MTO grande crasha.
-#   STR: ProgressBar do tamanho da tela, texto pequeno (2-4 chars), scale max
 class FontCache:
     """Cache of IMGUI's ImFont objects.
 

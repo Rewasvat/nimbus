@@ -39,14 +39,25 @@ class TextObject:
         self.text: str = text
         self.align: TextAlignment = TextAlignment.CENTER
         self.area = Rectangle()
+        """Position and size of area where to draw this text."""
         self.wrapped: bool = False
         self.scale = 1.0
+        """Scale of the text.
+        * 0 < scale < 1: scaled-down text.
+        * scale == 1: original text size. Default font-size is 20, but font-size is automatically calculated based on this scale
+        in a few frames, so that when rendering we try to use the closest font-size and less scaling to achieve the desired result.
+        * 1 < scale < 2: scaled-up text.
+        * scale == 2: text at the largest size possible to fit our area.
+        """
         self.color = Colors.white
         self.current_font_size: int = 20
+        """Font size calculated automatically based on our area and scale. After changing scale, this may take a few frames to update."""
         self.last_font_size: int = 20
         self.font_size_counter: int = 0
         self.font: Fonts = Fonts.LCARS
+        """Which font to use. Default to LCARS."""
         self.debug_draw_boxes = False
+        """Used for debugging. Draws some thin rects to display internal text sizes."""
         self._text_rect = Rectangle()
 
     @property
