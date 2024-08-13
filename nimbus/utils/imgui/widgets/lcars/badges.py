@@ -88,8 +88,8 @@ class SFCM(LeafWidget):
                 C 105.980,146.162 109.656,145.847 114.973,146.039 Z",
         ]
         self.laurels = [
-            XAMLPath(" ".join(left_laurel_path), self._xaml_scale),
-            XAMLPath(" ".join(right_laurel_path), self._xaml_scale)
+            XAMLPath(" ".join(left_laurel_path), self._xaml_scale, self._white),
+            XAMLPath(" ".join(right_laurel_path), self._xaml_scale, self._white)
         ]
         self.laurels[1].reverse()  # Right XAML path should be reversed to render properly.
 
@@ -181,19 +181,14 @@ class SFCM(LeafWidget):
             "M 79.955,60.394 C 82.265,73.256 80.024,71.383 93.009,73.379 C 79.641,75.566 82.019,73.625 80.024,86.432 \
                 C 78.151,73.939 79.832,75.320 66.916,73.379 C 79.532,71.383 77.714,73.188 79.969,60.394 L 79.969,60.394 L 79.955,60.394 Z",
         ]
-        self.star_crosses = [XAMLPath(p, self._xaml_scale) for p in self.star_crosses]
+        self.star_crosses = [XAMLPath(p, self._xaml_scale, self._white) for p in self.star_crosses]
 
     def _draw_badge(self):
         """Draws this badge using imgui."""
-        base_pos = self._pos + self.out_margin
-        base_size = self._area - self.out_margin * 2
         ratio = 1.0 / self._xaml_scale.aspect_ratio()
-        if base_size.y * ratio > base_size.x:
-            size = Vector2(base_size.x, base_size.x / ratio)
-            pos = base_pos + (0, (base_size.y - size.y) * 0.5)
-        else:
-            size = Vector2(base_size.y * ratio, base_size.y)
-            pos = base_pos + ((base_size.x - size.x) * 0.5, 0)
+        badge_area = self.slot.area.get_inner_rect(ratio, self.out_margin)
+        pos = badge_area.position
+        size = badge_area.size
 
         draw = imgui.get_window_draw_list()
 
@@ -218,11 +213,11 @@ class SFCM(LeafWidget):
             center = pos + self._xaml_scale * (x, top_y) * size + (0, radius)
             draw.add_circle_filled(center, radius, self._white.u32)
         for star_path in self.star_crosses:
-            star_path.render(pos, size, self._white)
+            star_path.render(pos, size)
 
         # Draw details (laurels)
         for det_path in self.laurels:
-            det_path.render(pos, size, self._white)
+            det_path.render(pos, size)
 
         # Draw text
         x_min = 4.384

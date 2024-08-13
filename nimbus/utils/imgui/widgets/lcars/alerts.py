@@ -64,15 +64,10 @@ class Alert(LeafWidget):
 
     def _draw_alert(self):
         """Internal utility to render our rectangle."""
-        base_pos = self._pos + self.out_margin
-        base_size = self._area - self.out_margin * 2
         ratio = 1.0 / self._xaml_scale.aspect_ratio()
-        if base_size.y * ratio > base_size.x:
-            size = Vector2(base_size.x, base_size.x / ratio)
-            pos = base_pos + (0, (base_size.y - size.y) * 0.5)
-        else:
-            size = Vector2(base_size.y * ratio, base_size.y)
-            pos = base_pos + ((base_size.x - size.x) * 0.5, 0)
+        alert_area = self.slot.area.get_inner_rect(ratio, self.out_margin)
+        pos = alert_area.position
+        size = alert_area.size
 
         # draw = imgui.get_window_draw_list()
         # draw.add_rect(base_pos, base_pos+base_size, Colors.blue.u32)
@@ -100,7 +95,7 @@ class Alert(LeafWidget):
         self._small_text.draw()
 
         for path in self.fixed_paths:
-            path.render(pos, size, self.color)
+            path.render(pos, size)
 
     def draw_bars(self, pos: Vector2, size: Vector2):
         """Internal method to draw the animated top and bottom bars of the alert."""
@@ -141,7 +136,7 @@ class Alert(LeafWidget):
         ]
         self.fixed_paths: list[XAMLPath] = []
         for path in fixed_paths:
-            self.fixed_paths.append(XAMLPath(path, self._xaml_scale))
+            self.fixed_paths.append(XAMLPath(path, self._xaml_scale, self.color))
 
     def _setup_bar_data(self):
         """Sets up this instance's ``bar_data`` and the related ``text_animation`` attributes,
@@ -278,6 +273,8 @@ class Alert(LeafWidget):
             self.color = Color(1.0, 241/255, 0, 1)
         self._large_text.color = self.color.copy()
         self._small_text.color = self._large_text.color
+        for path in self.fixed_paths:
+            path.fill_color = self.color
         self.bar_data.clear()
         self._setup_bar_data()
 
@@ -287,11 +284,20 @@ class XAMLPath:
 
     The XAML Path string data may define several shapes (polygons), which are represented here with the
     ``XAMLShape`` class we'll build based on the path-data.
+
+    Note that when drawing shapes with fill color, those shapes are assumed to be concave (imgui's ``path_fill_concave`` is used),
+    and thus some visual artifacts may appear in some cases. Most notably, internal holes are not supported inside concave shapes in imgui's
+    simple concave rendering algorithm.
     """
 
-    def __init__(self, path: str, scale: Vector2):
+    def __init__(self, path: str, scale: Vector2, fill_color: Color, stroke_color: Color = None, stroke_thickness: float = 0):
         self.path = path
         self.scale = scale
+        self.fill_color = fill_color
+        self.stroke_color = stroke_color
+        # NOTE: this `*4` was found by trial and error to put stroke thickness apparently right. However, this was tried out only with the
+        #   reactor bar line paths. This might need refactoring to set different scale factor for other Paths.
+        self.stroke_thickness = stroke_thickness * scale.min_component() * 4
         self.shapes: list[XAMLShape] = []
         self._build()
 
@@ -333,7 +339,7 @@ class XAMLPath:
         to a Vector2 in our relative coordinate system."""
         return Vector2(*[float(c) for c in point_text.split(",")]) * self.scale
 
-    def render(self, pos: Vector2, size: Vector2, color: Color):
+    def render(self, pos: Vector2, size: Vector2):
         """Renders this XAML Path polygon using IMGUI.
 
         The path's points (the polygon vertices) are internally represented in a relative area.
@@ -343,10 +349,15 @@ class XAMLPath:
         Args:
             pos (Vector2): The top-left position of the area to draw this path at.
             size (Vector2): The size of the area to draw this path.
-            color (Color): The color to use when drawing the path.
         """
+        draw = imgui.get_window_draw_list()
         for shape in self.shapes:
-            shape.render(pos, size, color)
+            if self.fill_color is not None:
+                shape.render(pos, size)
+                draw.path_fill_concave(self.fill_color.u32)
+            if self.stroke_color is not None and self.stroke_thickness > 0:
+                shape.render(pos, size)
+                draw.path_stroke(self.stroke_color.u32, thickness=self.stroke_thickness * size.min_component())
 
     def reverse(self):
         """Reverses the drawing order of all shapes contained in this path.
@@ -357,6 +368,14 @@ class XAMLPath:
         """
         for shape in self.shapes:
             shape.reverse()
+
+    def swap_axis(self):
+        """Swaps the X and Y components between each other in all points of all our shapes.
+
+        This essentially "inverts", or rotates, the shapes 90 degrees.
+        """
+        for shape in self.shapes:
+            shape.swap_axis()
 
 
 class XAMLShape:
@@ -392,19 +411,21 @@ class XAMLShape:
         """
         self.segments.append(XAMLCurve(control1, control2, end))
 
-    def render(self, pos: Vector2, size: Vector2, color: Color):
-        """Renders this shape using IMGUI. This assumes this shape to be concave.
+    def render(self, pos: Vector2, size: Vector2):
+        """Renders this shape using IMGUI.
+
+        Note that while this draws all segments of this shape, it doesn't "finish" the shape render with
+        either draw-filling or draw-stroking it. Calling ``path_fill_*`` or ``path_stroke`` is the responsibility
+        of whoever uses this.
 
         Args:
             pos (Vector2): Top-left position of the area to draw this shape into.
             size (Vector2): Size of the area to draw this shape into.
-            color (Color): Color to use when drawing this shape (fill).
         """
         draw = imgui.get_window_draw_list()
         draw.path_line_to(pos + size * self.initial_point)
         for segment in self.segments:
             segment.render(pos, size)
-        draw.path_fill_concave(color.u32)
 
     def reverse(self):
         """Reverses the drawing order of this polygon's vertices, by reverting all our segments.
@@ -418,6 +439,15 @@ class XAMLShape:
         for seg in reversed(self.segments):
             prev_point = seg.reverse(prev_point)
         self.initial_point = prev_point
+
+    def swap_axis(self):
+        """Swaps the X and Y components between each other in all points of all our segments.
+
+        This essentially "inverts", or rotates, this shape 90 degrees.
+        """
+        self.initial_point.swap_axis()
+        for segment in self.segments:
+            segment.swap_axis()
 
 
 class XAMLLine:
@@ -459,6 +489,13 @@ class XAMLLine:
         old_point = self.point
         self.point = prev_starting
         return old_point
+
+    def swap_axis(self):
+        """Swaps the X and Y components between each other in all points of this segment.
+
+        This essentially "inverts", or rotates, this segment 90 degrees.
+        """
+        self.point.swap_axis()
 
 
 class XAMLCurve:
@@ -506,6 +543,15 @@ class XAMLCurve:
         old_end = self.end
         self.end = prev_starting
         return old_end
+
+    def swap_axis(self):
+        """Swaps the X and Y components between each other in all points of this segment.
+
+        This essentially "inverts", or rotates, this segment 90 degrees.
+        """
+        self.control1.swap_axis()
+        self.control2.swap_axis()
+        self.end.swap_axis()
 
 
 class Animation:
