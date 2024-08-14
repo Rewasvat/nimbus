@@ -1,6 +1,5 @@
 import nimbus.utils.imgui.type_editor as types
 from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
-from nimbus.utils.imgui.widgets.label import TextObject, Fonts
 from nimbus.utils.imgui.widgets.progressbar import ChainedBarObject, BarType, RectCorners
 from nimbus.utils.imgui.widgets.lcars.alerts import XAMLPath
 from nimbus.utils.imgui.nodes import input_property
@@ -52,10 +51,8 @@ class ReactorBar(LeafWidget):
         reactor_blob_bar.frame_thickness = 0
         reactor_blob_bar.color = Colors.grey
         reactor_blob_bar.bar_color = self.bottom_fill_color
-        self.bottom_bar.add_bar(Rectangle(initial_bottom_pos + bar_offset, bar_size), True)
-        self.bottom_bar.add_bar(Rectangle(initial_bottom_pos + bar_offset*2, bar_size), True)
-        self.bottom_bar.add_bar(Rectangle(initial_bottom_pos + bar_offset*3, bar_size), True)
-        self.bottom_bar.add_bar(Rectangle(initial_bottom_pos + bar_offset*4, bar_size), True)
+        for i in range(4):
+            self.bottom_bar.add_bar(Rectangle(initial_bottom_pos + bar_offset * (i + 1), bar_size), True)
 
         self.top_bar = ChainedBarObject()
         reactor_blob_bar = self.top_bar.add_bar(Rectangle(initial_top_pos, bar_size))
@@ -65,10 +62,8 @@ class ReactorBar(LeafWidget):
         reactor_blob_bar.frame_thickness = 0
         reactor_blob_bar.color = Colors.grey
         reactor_blob_bar.bar_color = self.top_fill_color
-        self.top_bar.add_bar(Rectangle(initial_top_pos - bar_offset, bar_size), True)
-        self.top_bar.add_bar(Rectangle(initial_top_pos - bar_offset*2, bar_size), True)
-        self.top_bar.add_bar(Rectangle(initial_top_pos - bar_offset*3, bar_size), True)
-        self.top_bar.add_bar(Rectangle(initial_top_pos - bar_offset*4, bar_size), True)
+        for i in range(4):
+            self.top_bar.add_bar(Rectangle(initial_top_pos - bar_offset * (i + 1), bar_size), True)
 
         self.bar_cross_thickness = 0.018
         bar_cross_pos = Vector2(77.60, 68.74) * self._xaml_scale
@@ -191,9 +186,11 @@ class ReactorBar(LeafWidget):
         draw = imgui.get_window_draw_list()
         self.bottom_bar.area = reactor_area
         self.bottom_bar.value = self.bottom_value
+        self.bottom_bar.set_all_fill_color(self.bottom_fill_color)
         self.bottom_bar.draw()
         self.top_bar.area = reactor_area
         self.top_bar.value = self.top_value
+        self.top_bar.set_all_fill_color(self.top_fill_color)
         self.top_bar.draw()
 
         pos = reactor_area.position
@@ -247,20 +244,10 @@ class ReactorBar(LeafWidget):
         """The color of the top bar fill. [GET/SET]"""
         return Color.from_hex("FFADD8E6", use_argb=True)
 
-    @top_fill_color.setter
-    def top_fill_color(self, value: Color):
-        for bar, area in self.top_bar:
-            bar.bar_color = value
-
     @input_property()
     def bottom_fill_color(self) -> Color:
         """The color of the bottom bar fill. [GET/SET]"""
         return Color.from_hex("FFADD8E6", use_argb=True)
-
-    @bottom_fill_color.setter
-    def bottom_fill_color(self, value: Color):
-        for bar, area in self.bottom_bar:
-            bar.bar_color = value
 
     @types.bool_property()
     def is_vertical(self):

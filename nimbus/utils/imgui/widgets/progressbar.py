@@ -265,6 +265,15 @@ class ChainedBarObject:
             total_value -= bar.value
             bar.draw()
 
+    def set_all_fill_color(self, color: Color):
+        """Sets the fill color of all sub-bars to the given color.
+
+        Args:
+            color (Color): Color to use as fill color in all bars.
+        """
+        for bar, area in self:
+            bar.bar_color = color
+
     def __iter__(self) -> Iterator[tuple[BarObject, Rectangle]]:
         return iter(zip(self._bars, self._bar_areas))
 
