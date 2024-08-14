@@ -266,5 +266,3 @@ def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
 # ============== LCARS Only: (?)
 # TODO: [widget] Communicator: puramente visual. Mas usa gradiente, não dá pra portar o vetorial facil. Melhor ser imagem.
 # TODO: [widget] MainControls: que me lembro, era uma coleção de vários botões em formatos diferentes.
-# TODO: [widget] ReactorBar: seriam 2 sensores, meio que 2 ProgressBars juntas.
-# TODO: [widget] WavesBar: seriam 2 sensores, meio que 2 ProgressBars juntas.
