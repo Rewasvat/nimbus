@@ -27,6 +27,19 @@ def get_all_links_from_nodes(nodes: list[Node]):
 #   - testar o role de shortcuts do imgui-node-editor
 # TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
 # TODO: atalho de teclado pro Fit To Window
+# TODO: melhorar serialização de dados dos nodes e afins.
+#   - atualmente, se alteramos algum node pra ter um atributo a mais e usar tal attr no render, vai crashar se carregar node
+#     desse tipo antes da alteracao.
+#   - ideias:
+#       - fazer classes de nodes e afins terem um metodo "setup/init" que seria basicamente o construtor: setando attrs default.
+#           - Usa isso no construtor e no setstate.
+#       - arrumar setstate()s pra rodarem o __init__ de tal classe pra setar as coisas default.
+#           - supostamente mais facil (nao precisa alterar um monte de classe), mas tem problemas:
+#           - como fazer com attrs que não podemos re-criar, como IDs e pins?
+#           - como saber quais args passar pro __init__()?
+#       * de qualquer jeito, saberiamos quais são os attrs expected da classe.
+#           - Poderiamos usar isso pra ignorar dados vindos do state que não correspondem a attrs.
+#           - eles seriam attrs deletados da classe
 class NodeEditor:
     """Represents a Node Editor system.
 

@@ -125,7 +125,7 @@ class WavesBar(LeafWidget):
         ]
 
     def _draw_waves(self):
-        """Draws the LCARS reactor bar widget using imgui"""
+        """Draws the LCARS waves bar widget using imgui"""
         if self.is_vertical:
             ratio = self._xaml_scale.aspect_ratio()
         else:

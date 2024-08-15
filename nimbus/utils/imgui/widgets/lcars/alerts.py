@@ -285,12 +285,12 @@ class XAMLPath:
     The XAML Path string data may define several shapes (polygons), which are represented here with the
     ``XAMLShape`` class we'll build based on the path-data.
 
-    Note that when drawing shapes with fill color, those shapes are assumed to be concave (imgui's ``path_fill_concave`` is used),
+    Note that when drawing shapes with fill color, those shapes are assumed by default to be concave (imgui's ``path_fill_concave`` is used),
     and thus some visual artifacts may appear in some cases. Most notably, internal holes are not supported inside concave shapes in imgui's
     simple concave rendering algorithm.
     """
 
-    def __init__(self, path: str, scale: Vector2, fill_color: Color, stroke_color: Color = None, stroke_thickness: float = 0):
+    def __init__(self, path: str, scale: Vector2, fill_color: Color, stroke_color: Color = None, stroke_thickness: float = 0, is_convex=False):
         self.path = path
         self.scale = scale
         self.fill_color = fill_color
@@ -298,6 +298,7 @@ class XAMLPath:
         # NOTE: this `*4` was found by trial and error to put stroke thickness apparently right. However, this was tried out only with the
         #   reactor bar line paths. This might need refactoring to set different scale factor for other Paths.
         self.stroke_thickness = stroke_thickness * scale.min_component() * 4
+        self.is_convex = is_convex
         self.shapes: list[XAMLShape] = []
         self._build()
 
@@ -354,7 +355,10 @@ class XAMLPath:
         for shape in self.shapes:
             if self.fill_color is not None:
                 shape.render(pos, size)
-                draw.path_fill_concave(self.fill_color.u32)
+                if self.is_convex:
+                    draw.path_fill_convex(self.fill_color.u32)
+                else:
+                    draw.path_fill_concave(self.fill_color.u32)
             if self.stroke_color is not None and self.stroke_thickness > 0:
                 shape.render(pos, size)
                 draw.path_stroke(self.stroke_color.u32, thickness=self.stroke_thickness * size.min_component())

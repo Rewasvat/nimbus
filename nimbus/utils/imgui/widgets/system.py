@@ -96,6 +96,9 @@ class SystemRootNode(Node):
 # TODO: talvez de pra separar o "WidgetSystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
 #       e finalmente uma com widget+actions+sensores
 # TODO: atalho de teclado pro save
+# TODO: widget novo: imagem. Scala a imagem para a area do slot. Pode escolher UV-coords usadas (sub-frames). Escolher imagem por path anywhere?
+# TODO: widget novo: polygon. Tipo o XAMLPath. User pode configurar vários shapes em runtime.
+#   - pra cada shape, user vai configurando segmentos, fill color, stroke color, stroke thickness, etc.
 class WidgetSystem:
     """Represents a complete user-configurable UI and logic system.
 
