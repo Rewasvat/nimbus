@@ -62,18 +62,19 @@ class SystemRootNode(Node):
     * System level DataPins providing basic system data for the graph.
     """
 
-    def __init__(self, system: 'WidgetSystem'):
+    def __init__(self, system: 'WidgetSystem' = None):
         super().__init__()
         self.system: WidgetSystem = system
-        self.widget_root = SystemRootPin(self)
-        self.on_update = actions.ActionFlow(self, PinKind.output, "On Update")
-        self.add_pin(self.widget_root)
-        self.add_pin(self.on_update)
         self.node_title = str(system)
         self.node_bg_color = Color(0.12, 0.22, 0.1, 0.75)
         self.node_header_color = Color(0.32, 0.6, 0.04, 0.6)
         self.can_be_deleted = False
-        self.create_data_pins_from_properties()
+        if not self._is_unpickling():
+            self.widget_root = SystemRootPin(self)
+            self.on_update = actions.ActionFlow(self, PinKind.output, "On Update")
+            self.add_pin(self.widget_root)
+            self.add_pin(self.on_update)
+            self.create_data_pins_from_properties()
 
     @output_property(use_prop_value=True)
     def delta_time(self) -> float:

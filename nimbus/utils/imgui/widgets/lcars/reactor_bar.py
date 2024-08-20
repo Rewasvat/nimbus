@@ -37,7 +37,7 @@ class ReactorBar(LeafWidget):
         bar_offset = bar_size + (0, 5.41 * self._xaml_scale.y)
         bar_offset.x = 0
 
-        if not self.is_vertical:
+        if not self._is_vertical:
             bar_size.swap_axis()
             initial_bottom_pos.swap_axis()
             initial_top_pos.swap_axis()
@@ -46,29 +46,27 @@ class ReactorBar(LeafWidget):
         self.bottom_bar = ChainedBarObject()
         reactor_blob_bar = self.bottom_bar.add_bar(Rectangle(initial_bottom_pos, bar_size))
         reactor_blob_bar.rounding = 1
-        reactor_blob_bar.bar_type = BarType.VERTICAL if self.is_vertical else BarType.HORIZONTAL
+        reactor_blob_bar.bar_type = BarType.VERTICAL if self._is_vertical else BarType.HORIZONTAL
         reactor_blob_bar.corners = RectCorners.ALL
         reactor_blob_bar.frame_thickness = 0
         reactor_blob_bar.color = Colors.grey
-        reactor_blob_bar.bar_color = self.bottom_fill_color
         for i in range(4):
             self.bottom_bar.add_bar(Rectangle(initial_bottom_pos + bar_offset * (i + 1), bar_size), True)
 
         self.top_bar = ChainedBarObject()
         reactor_blob_bar = self.top_bar.add_bar(Rectangle(initial_top_pos, bar_size))
         reactor_blob_bar.rounding = 1
-        reactor_blob_bar.bar_type = BarType.INVERTED_VERTICAL if self.is_vertical else BarType.INVERTED_HORIZONTAL
+        reactor_blob_bar.bar_type = BarType.INVERTED_VERTICAL if self._is_vertical else BarType.INVERTED_HORIZONTAL
         reactor_blob_bar.corners = RectCorners.ALL
         reactor_blob_bar.frame_thickness = 0
         reactor_blob_bar.color = Colors.grey
-        reactor_blob_bar.bar_color = self.top_fill_color
         for i in range(4):
             self.top_bar.add_bar(Rectangle(initial_top_pos - bar_offset * (i + 1), bar_size), True)
 
         self.bar_cross_thickness = 0.018
         bar_cross_pos = Vector2(77.60, 68.74) * self._xaml_scale
         bar_cross_size = Vector2(23.40, 444.47) * self._xaml_scale
-        if not self.is_vertical:
+        if not self._is_vertical:
             bar_cross_pos.swap_axis()
             bar_cross_size.swap_axis()
             bar_cross_pos -= (0.01, 0)
@@ -92,7 +90,7 @@ class ReactorBar(LeafWidget):
         self.bottom_blocks: list[XAMLPath] = []
         for thickness, stroke_color, fill_color, path in bottom_blocks_info:
             self.bottom_blocks.append(XAMLPath(path, self._xaml_scale, fill_color, stroke_color, thickness))
-            if not self.is_vertical:
+            if not self._is_vertical:
                 self.bottom_blocks[-1].swap_axis()
 
         top_blocks_info = [
@@ -108,7 +106,7 @@ class ReactorBar(LeafWidget):
         self.top_blocks: list[XAMLPath] = []
         for thickness, stroke_color, fill_color, path in top_blocks_info:
             self.top_blocks.append(XAMLPath(path, self._xaml_scale, fill_color, stroke_color, thickness))
-            if not self.is_vertical:
+            if not self._is_vertical:
                 self.top_blocks[-1].swap_axis()
 
         center_blocks_info = [
@@ -128,7 +126,7 @@ class ReactorBar(LeafWidget):
         self.center_blocks: list[XAMLPath] = []
         for thickness, stroke_color, fill_color, path in center_blocks_info:
             self.center_blocks.append(XAMLPath(path, self._xaml_scale, fill_color, stroke_color, thickness))
-            if not self.is_vertical:
+            if not self._is_vertical:
                 self.center_blocks[-1].swap_axis()
 
         self.lines_info = [

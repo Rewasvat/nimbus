@@ -34,19 +34,7 @@ class Panel(ContainerWidget):
         super().__init__()
         self.accepts_new_slots = False
         base_names = ["CornerTopLeft", "CornerTopRight", "CornerBottomLeft", "CornerBottomRight"]
-        self._fixed_slots = [Slot(self, name) for name in base_names]
-        self.corners = [
-            Corner(CornerType.TOP_LEFT),
-            Corner(CornerType.TOP_RIGHT),
-            Corner(CornerType.BOTTOM_LEFT),
-            Corner(CornerType.BOTTOM_RIGHT),
-        ]
-        self.borders = {
-            PanelBorders.TOP: Slot(self, "Top Border"),
-            PanelBorders.BOTTOM: Slot(self, "Bottom Border"),
-            PanelBorders.LEFT: Slot(self, "Left Border"),
-            PanelBorders.RIGHT: Slot(self, "Right Border"),
-        }
+
         self._borders_type: PanelBorders = PanelBorders.ALL
         self._out_margin: float = 5.0
         self._border_width_ratio = 0.3
@@ -55,19 +43,34 @@ class Panel(ContainerWidget):
         self._use_absolute_values = False
         self._color_border_childs = True
 
-        self._child_slot = Slot(self, "Content")
-        self._child_slot.can_be_deleted = False
-        self._slots.append(self._child_slot)
+        if not self._is_unpickling():
+            self._fixed_slots = [Slot(self, name) for name in base_names]
+            self.corners = [
+                Corner(CornerType.TOP_LEFT),
+                Corner(CornerType.TOP_RIGHT),
+                Corner(CornerType.BOTTOM_LEFT),
+                Corner(CornerType.BOTTOM_RIGHT),
+            ]
+            self.borders = {
+                PanelBorders.TOP: Slot(self, "Top Border"),
+                PanelBorders.BOTTOM: Slot(self, "Bottom Border"),
+                PanelBorders.LEFT: Slot(self, "Left Border"),
+                PanelBorders.RIGHT: Slot(self, "Right Border"),
+            }
 
-        for i, corner in enumerate(self.corners):
-            self._fixed_slots[i].child = corner
-            c = corner.type.name.lower()
-            c = "".join([p.capitalize() for p in c.split("_")])
-            corner.name = f"{self.id}-{c}Corner"
-            corner.editable = False
-        for border in self.borders.values():
-            border.can_be_deleted = False
-            self._slots.append(border)
+            self._child_slot = Slot(self, "Content")
+            self._child_slot.can_be_deleted = False
+            self._slots.append(self._child_slot)
+
+            for i, corner in enumerate(self.corners):
+                self._fixed_slots[i].child = corner
+                c = corner.type.name.lower()
+                c = "".join([p.capitalize() for p in c.split("_")])
+                corner.name = f"{self.id}-{c}Corner"
+                corner.editable = False
+            for border in self.borders.values():
+                border.can_be_deleted = False
+                self._slots.append(border)
 
     # Editable Properties
     @types.enum_property()

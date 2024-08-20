@@ -39,11 +39,12 @@ class Board(ContainerWidget):
     def __init__(self, names: list[str] = None):
         super().__init__()
         self._slot_class = BoardSlot
-        self._slots = [BoardSlot(self, name) for name in (names or ["Default"])]
-        self.slot_counter = len(self._slots)
         self._selected_name: str = None  # will be fixed by the update_slots()
-        """Name of the selected slot."""
-        self.on_slots_changed()
+        if not self._is_unpickling():
+            self._slots = [BoardSlot(self, name) for name in (names or ["Default"])]
+            self.slot_counter = len(self._slots)
+            """Name of the selected slot."""
+            self.on_slots_changed()
 
     @property
     def boards(self) -> list[str]:

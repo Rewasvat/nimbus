@@ -381,3 +381,48 @@ class EventDispatcher[T: callable]:
         """
         if func in self.listeners:
             self.listeners.remove(func)
+
+
+def initialize_object(obj: object, state: dict[str]):
+    """Initializes a object being deserialized.
+
+    This updates the object by calling its ``__init__()`` method (without args), and then
+    updating its ``__dict__`` with a subset of all items in the given ``state``.
+    This state-subset is based on all items in state which exist in the object - so
+    only existing attributes in object are update with their values from state,
+    other values from state are ignored.
+
+    Thus, a object's ``__setstate__()`` method can use this to initialize the deserialized (unpickling)
+    instance.
+
+    The object's ``__init__()`` method should setup the instance's default attributes and other initialization
+    as usual. However, if the object has attributes that should not be recreated when unpickling, such as objects that
+    change the state of another resource/manager, the implementation may use ``utils.is_unpickling()`` to change
+    the initialization behavior.
+
+    Args:
+        obj (object): object to update
+        state (dict[str]): object's state dict to use for updating. Usually got from the object's ``__getstate__`` method.
+    """
+    obj.__in_setstate = True
+    obj.__init__()
+    base_state = vars(obj)
+    new_state = {k: v for k, v in state.items() if k in base_state}
+    obj.__dict__.update(new_state)
+    del obj.__in_setstate
+
+
+def is_unpickling(obj: object) -> bool:
+    """Checks if the given object is unpickling.
+
+    This only applies inside the object's ``__init__()`` method, when using ``utils.initialize_object()``
+    during unpickling to properly setup the recreated instance.
+
+    Args:
+        obj (object): object to check if is currently unpickling.
+
+    Returns:
+        bool: True if the object is unpickling - the ``__init__()`` is being called from ``__setstate__``.
+        False otherwise (regular init call creating a new instance).
+    """
+    return getattr(obj, "__in_setstate", False)

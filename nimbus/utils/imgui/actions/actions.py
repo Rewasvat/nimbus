@@ -103,10 +103,11 @@ class Action(Node):
 
     def __init__(self, include_default_flow_pins=True):
         super().__init__()
-        if include_default_flow_pins:
-            self.add_pin(ActionFlow(self, PinKind.input, "Execute"))
-            self.add_pin(ActionFlow(self, PinKind.output, "Trigger"))
-        self.create_data_pins_from_properties()
+        if not self._is_unpickling():
+            if include_default_flow_pins:
+                self.add_pin(ActionFlow(self, PinKind.input, "Execute"))
+                self.add_pin(ActionFlow(self, PinKind.output, "Trigger"))
+            self.create_data_pins_from_properties()
 
     def execute(self):
         """Executes the logic of this action.

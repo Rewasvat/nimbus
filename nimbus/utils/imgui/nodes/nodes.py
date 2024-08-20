@@ -3,6 +3,7 @@ from typing import Callable, TYPE_CHECKING
 from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.math import Vector2, Rectangle
 from nimbus.utils.idgen import IDManager
+from nimbus.utils.utils import initialize_object, is_unpickling
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
 if TYPE_CHECKING:
@@ -34,7 +35,8 @@ class Node:
     """
 
     def __init__(self):
-        self.node_id = imgui_node_editor.NodeId(nodes_id_generator().create())
+        if not self._is_unpickling():
+            self.node_id = imgui_node_editor.NodeId(nodes_id_generator().create())
         self.can_be_deleted = True
         """If this object can be deleted by user-interaction."""
         self.is_selected = False
@@ -438,10 +440,24 @@ class Node:
         Use the data to rebuild this instance.
         NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
         """
-        self.__dict__.update(state)
+        initialize_object(self, state)
         self.node_id = imgui_node_editor.NodeId(state["node_id"])
         for pin in self.get_input_pins() + self.get_output_pins():
             pin._update_state_after_recreation(self)
+
+    def _is_unpickling(self):
+        """Checks if this Node is being unpickled.
+
+        This only applies inside the ``__init__()`` method.
+        When a node is unpickled, the ``__setstate__()`` calls its init() without arguments to setup default attributes.
+        The ``__init__()`` implementation may use this to check if its being unpickled, and change initialization behavior accordingly, such as
+        not creating NodePins or other complex objects that should not be spuriously created just to then be changed by the ``__setstate__()``
+        finising unpickling the object.
+
+        Setting up default attributes like this, even when unpickling, can help easily solve problems that arise when changing a class and then
+        unpickling an object from a previous version of that class.
+        """
+        return is_unpickling(self)
 
 
 PinKind = imgui_node_editor.PinKind

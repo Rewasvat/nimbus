@@ -47,7 +47,7 @@ class WavesBar(LeafWidget):
         bar_size.x += offset
         initial_right_pos.x -= offset
 
-        if not self.is_vertical:
+        if not self._is_vertical:
             bar_size.swap_axis()
             initial_left_pos.swap_axis()
             initial_right_pos.swap_axis()
@@ -56,14 +56,14 @@ class WavesBar(LeafWidget):
 
         position_offsets = [bar_offset * i for i in range(8)]
 
-        if self.is_inverted and self.is_vertical:
+        if self._is_inverted and self._is_vertical:
             bar_type = BarType.VERTICAL
             position_offsets.reverse()
-        elif self.is_inverted and (not self.is_vertical):
+        elif self._is_inverted and (not self._is_vertical):
             bar_type = BarType.INVERTED_HORIZONTAL
-        elif (not self.is_inverted) and self.is_vertical:
+        elif (not self._is_inverted) and self._is_vertical:
             bar_type = BarType.INVERTED_VERTICAL
-        elif (not self.is_inverted) and (not self.is_vertical):
+        elif (not self._is_inverted) and (not self._is_vertical):
             bar_type = BarType.HORIZONTAL
             position_offsets.reverse()
 
@@ -71,10 +71,9 @@ class WavesBar(LeafWidget):
         blob_bar = self.left_bar.add_bar(Rectangle(initial_left_pos - position_offsets[0], bar_size))
         blob_bar.rounding = 1
         blob_bar.bar_type = bar_type
-        blob_bar.corners = RectCorners.LEFT if self.is_vertical else RectCorners.BOTTOM
+        blob_bar.corners = RectCorners.LEFT if self._is_vertical else RectCorners.BOTTOM
         blob_bar.frame_thickness = 0
         blob_bar.color = Colors.grey
-        blob_bar.bar_color = self.left_fill_color
         for offset in position_offsets[1:]:
             self.left_bar.add_bar(Rectangle(initial_left_pos - offset, bar_size), True)
 
@@ -82,10 +81,9 @@ class WavesBar(LeafWidget):
         blob_bar = self.right_bar.add_bar(Rectangle(initial_right_pos - position_offsets[0], bar_size))
         blob_bar.rounding = 1
         blob_bar.bar_type = bar_type
-        blob_bar.corners = RectCorners.RIGHT if self.is_vertical else RectCorners.TOP
+        blob_bar.corners = RectCorners.RIGHT if self._is_vertical else RectCorners.TOP
         blob_bar.frame_thickness = 0
         blob_bar.color = Colors.grey
-        blob_bar.bar_color = self.right_fill_color
         for offset in position_offsets[1:]:
             self.right_bar.add_bar(Rectangle(initial_right_pos - offset, bar_size), True)
 
@@ -101,7 +99,7 @@ class WavesBar(LeafWidget):
         for line in self.lines_info:
             line[1] = Vector2(*line[1]) * self._xaml_scale
             line[2] = Vector2(*line[2]) * self._xaml_scale
-            if not self.is_vertical:
+            if not self._is_vertical:
                 line[1].swap_axis()
                 line[2].swap_axis()
             mid_top += line[1]
@@ -114,7 +112,7 @@ class WavesBar(LeafWidget):
         top_block_p2 = Vector2(63.530, 16.570) * self._xaml_scale
         bottom_block_p1 = Vector2(16.410, 429.690) * self._xaml_scale
         bottom_block_p2 = Vector2(63.520, 445.760) * self._xaml_scale
-        if not self.is_vertical:
+        if not self._is_vertical:
             top_block_p1.swap_axis()
             top_block_p2.swap_axis()
             bottom_block_p1.swap_axis()

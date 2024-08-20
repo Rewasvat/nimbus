@@ -17,12 +17,13 @@ class Branch(LogicAction):
 
     def __init__(self):
         super().__init__()
-        default_trigger = self.get_output_pin("Trigger")
-        default_trigger.pin_name = "True"
-        default_trigger.pin_tooltip = "Triggered when the condition is True (truthy)."
-        false_trigger = ActionFlow(self, PinKind.output, "False")
-        false_trigger.pin_tooltip = "Triggered when the condition is False (falsy)."
-        self.add_pin(false_trigger)
+        if not self._is_unpickling():
+            default_trigger = self.get_output_pin("Trigger")
+            default_trigger.pin_name = "True"
+            default_trigger.pin_tooltip = "Triggered when the condition is True (truthy)."
+            false_trigger = ActionFlow(self, PinKind.output, "False")
+            false_trigger.pin_tooltip = "Triggered when the condition is False (falsy)."
+            self.add_pin(false_trigger)
 
     @input_property()
     def condition(self) -> bool:
@@ -44,12 +45,13 @@ class ForRangeLoop(LogicAction):
 
     def __init__(self):
         super().__init__()
-        default_trigger = self.get_output_pin("Trigger")
-        default_trigger.pin_name = "On Iteration"
-        default_trigger.pin_tooltip = "Triggered on each loop iteration."
-        finish_trigger = ActionFlow(self, PinKind.output, "Finished")
-        finish_trigger.pin_tooltip = "Triggered when the loop ends"
-        self.add_pin(finish_trigger)
+        if not self._is_unpickling():
+            default_trigger = self.get_output_pin("Trigger")
+            default_trigger.pin_name = "On Iteration"
+            default_trigger.pin_tooltip = "Triggered on each loop iteration."
+            finish_trigger = ActionFlow(self, PinKind.output, "Finished")
+            finish_trigger.pin_tooltip = "Triggered when the loop ends"
+            self.add_pin(finish_trigger)
 
     @input_property()
     def start(self) -> int:
