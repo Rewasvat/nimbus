@@ -424,6 +424,38 @@ class Node:
         self._inputs += data_inputs
         self._outputs += data_outputs
 
+    def setup_from_config(self, data: dict[str, any]):
+        """Performs custom setup of this Node object, when being recreated by a `NodeConfig`.
+
+        The NodeConfig calls this after creating the Node, but before setting the property's values
+        and setting up the links to other nodes. As such, Nodes can use this to setup any other
+        of their data that isn't a Imgui (or Data) Property or link.
+
+        Args:
+            data (dict[str, any]): dict of custom data of this Node to recreate it. Acquired via
+            ``self.get_custom_config_data()`` when the NodeConfig building this node was created.
+        """
+        pass
+
+    def get_custom_config_data(self):
+        """Gets a dict of custom config data of this Node, to store along with its `NodeConfig`.
+
+        When a NodeConfig for this Node is created, this will be called to store the node's custom
+        configuration data. That is, any data required to recreate this node that ISN'T: a (imgui/data) property
+        value, or a link to other nodes.
+
+        Data stored in the dict returned by this method MUST BE PICKABLE! And preferably not being a object instance
+        that might cause issues when loading (if the object class is changed), or cause other code to be executed.
+
+        When recreating a Node with its NodeConfig, this custom data will be passed to ``self.setup_from_config()``
+        to use with to update the node instance.
+
+        Returns:
+            dict[str, any]: dict of custom data of this Node to recreate it, when the NodeConfig
+            getting this data recreates the node.
+        """
+        return {}
+
     def __getstate__(self):
         """Pickle Protocol: overriding getstate to allow pickling this class.
         This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).

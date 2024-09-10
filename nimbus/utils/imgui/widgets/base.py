@@ -6,6 +6,7 @@ from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.general import not_user_creatable, menu_item
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind, output_property
 import nimbus.utils.imgui.type_editor as types
+import nimbus.utils.imgui.nodes.node_config as node_config
 
 if TYPE_CHECKING:
     from nimbus.utils.imgui.widgets.system import UISystem
@@ -648,3 +649,34 @@ class ContainerWidget(BaseWidget):
 
     def __iter__(self) -> Iterator[BaseWidget]:
         return iter(self.get_children())
+
+    def setup_from_config(self, data: dict[str]):
+        slots_data = data.pop("slots", [])
+        # Start by erasing all existing slots - these should be default slots created along with the widget
+        self._slots.clear()
+        # Recreate slots from stored config
+        for info in slots_data:
+            slot_name = info["slot_name"]
+            slot = info["slot_class"](self, slot_name)
+            self.slot_counter += 1
+            node_config.restore_prop_values_to_object(slot, info["prop_values"])
+            self._slots.append(slot)
+        self.on_slots_changed()
+        return super().setup_from_config(data)
+
+    def get_custom_config_data(self):
+        data = super().get_custom_config_data()
+        # ContainerWidgets need to store data about its slots as custom config data.
+        # Regular NodeConfig implementation does NOT store/recreate pins (like slots), since it's expected that when a node is recreated and
+        # its properties set with the same values, that'll be enough for the node to properly create/update its pins as expected.
+        # However, no property controls slot existence in ContainerWidgets.
+        slots_data = []
+        data["slots"] = slots_data
+        for slot in self._slots:
+            # Ignore Slot child widget, since that is a LINK. NodeConfig handles those automatically.
+            slots_data.append({
+                "slot_class": type(slot),
+                "slot_name": slot.pin_name,
+                "prop_values": node_config.get_all_prop_values_for_storage(slot),
+            })
+        return data

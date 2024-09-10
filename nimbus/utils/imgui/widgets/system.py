@@ -3,6 +3,7 @@ import nimbus.utils.command_utils as cmd_utils
 from imgui_bundle import imgui
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind, output_property
+from nimbus.utils.imgui.nodes.node_config import SystemConfig
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.widgets.base import BaseWidget, Slot, WidgetParentPin, draw_widget_pin_icon
 from nimbus.monitor.sensors import Sensor, Hardware, ComputerSystem
@@ -97,8 +98,8 @@ class SystemRootNode(Node):
             self.reposition_nodes([actions.ActionFlow, Slot, SystemRootPin])
         imgui.set_item_tooltip("Rearranges all nodes following this one according to depth in the graph.")
         if menu_item("Save"):
-            self.system.save_to_cache()
-        imgui.set_item_tooltip("Saves the System to disk. System saves automatically when closing.")
+            self.system.save_config()
+        imgui.set_item_tooltip("Saves the configuration of this UISystem to disk. This config can be later used to recreate/reuse this UISystem.")
 
 
 # TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
@@ -263,3 +264,75 @@ class UISystem:
 
     def __str__(self):
         return f"Widget System: {self.name}"
+
+
+class UIManager(metaclass=cmd_utils.Singleton):
+    """Singleton manager of UISystems.
+
+    Handles high-level, project-wide, operations regarding UISystems and related features.
+
+    Most notably, handles the persistent storage of SystemConfigs: the persistence of the configuration
+    objects that allow saving and recreation of any saved UISystems.
+    """
+
+    def __init__(self):
+        cache = DataCache()
+        self._config_cache_key = "UIManagerData"
+        self._configs: dict[str, SystemConfig] = cache.get_custom_cache(self._config_cache_key, {})
+
+    def get_all_configs(self):
+        """Gets a list of all stored SystemConfigs."""
+        return list(self._configs.values())
+
+    def get_all_config_names(self):
+        """Gets a sorted list of all stored config names."""
+        return sorted(self._configs.keys())
+
+    def get_config(self, name: str):
+        """Gets the stored SystemConfig with the given NAME. May return None if no config exists for the NAME."""
+        return self._configs.get(name)
+
+    def has_config(self, name: str):
+        """Checks if a SystemConfig with the given NAME exists."""
+        return name in self._configs
+
+    def update_config(self, config: SystemConfig):
+        """Updates the manager with the given UISystem config (a SystemConfig instance).
+
+        Configs are indexed by their name (``config.name``). If any config existed previously with
+        the same name, it'll be overwritten by this new given config.
+
+        This will thus save the config in persisten storage.
+
+        Args:
+            config (SystemConfig): the SystemConfig to store.
+        """
+        self._configs[config.name] = config
+        self.save()
+
+    def update_system(self, system: UISystem):
+        """Updates the saved UISystem configs with the config of the given system.
+        This will thus save the given system's config in persistent storage.
+
+        Args:
+            system (UISystem): the system to save its config.
+        """
+        config = SystemConfig.from_system(system)
+        self.update_config(config)
+
+    def remove_config(self, config: SystemConfig | str):
+        """Removes the given config from persistent storage, effectively deleting it.
+
+        Args:
+            config (SystemConfig | str): which config to remove. Can be the SystemConfig object itself
+            or its name.
+        """
+        name = config if isinstance(config, str) else config.name
+        if self.has_config(name):
+            self._configs.pop(name)
+            self.save()
+
+    def save(self):
+        """Saves the UIManager data (saved UISystem configs and so on) to disk."""
+        cache = DataCache()
+        cache.save_custom_cache(self._config_cache_key, self._configs)
