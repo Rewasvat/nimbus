@@ -1,4 +1,5 @@
 import nimbus.utils.imgui.actions as actions
+import nimbus.utils.command_utils as cmd_utils
 from imgui_bundle import imgui
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind, output_property
@@ -9,7 +10,7 @@ from nimbus.data import DataCache
 
 
 class SystemRootPin(NodePin):
-    """Widget Root Pin for a WidgetSystem's Root node."""
+    """Widget Root Pin for a UISystem's Root node."""
 
     def __init__(self, parent: 'SystemRootNode'):
         super().__init__(parent, PinKind.output, "Root")
@@ -19,7 +20,7 @@ class SystemRootPin(NodePin):
 
     @property
     def child(self):
-        """Gets the widget that is set as the root of our WidgetSystem. [GET/SET]"""
+        """Gets the widget that is set as the root of our UISystem. [GET/SET]"""
         return self._child
 
     @child.setter
@@ -54,7 +55,7 @@ class SystemRootPin(NodePin):
 
 
 class SystemRootNode(Node):
-    """Root Node for a WidgetSystem.
+    """Root Node for a UISystem.
 
     Provides base output pins from which the system may be defined:
     * A root widget pin to create the widget hierarchy.
@@ -62,10 +63,9 @@ class SystemRootNode(Node):
     * System level DataPins providing basic system data for the graph.
     """
 
-    def __init__(self, system: 'WidgetSystem' = None):
+    def __init__(self, system: 'UISystem' = None):
         super().__init__()
-        self.system: WidgetSystem = system
-        self.node_title = str(system)
+        self.system: UISystem = system
         self.node_bg_color = Color(0.12, 0.22, 0.1, 0.75)
         self.node_header_color = Color(0.32, 0.6, 0.04, 0.6)
         self.can_be_deleted = False
@@ -75,6 +75,16 @@ class SystemRootNode(Node):
             self.add_pin(self.widget_root)
             self.add_pin(self.on_update)
             self.create_data_pins_from_properties()
+
+    @property
+    def system(self) -> 'UISystem':
+        """Gets the UISystem that owns this root-node."""
+        return self._system
+
+    @system.setter
+    def system(self, value: 'UISystem'):
+        self._system = value
+        self.node_title = str(value)
 
     @output_property(use_prop_value=True)
     def delta_time(self) -> float:
@@ -94,13 +104,13 @@ class SystemRootNode(Node):
 # TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
 # TODO: opcao pra abrir edit em cima do render-widgets, tipo um overlay (nao abre outra janela, mostra widgets)
 # TODO: mudar nome disso? afinal agora junta widgets+actions+sensors
-# TODO: talvez de pra separar o "WidgetSystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
+# TODO: talvez de pra separar o "UISystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
 #       e finalmente uma com widget+actions+sensores
 # TODO: atalho de teclado pro save
 # TODO: widget novo: imagem. Scala a imagem para a area do slot. Pode escolher UV-coords usadas (sub-frames). Escolher imagem por path anywhere?
 # TODO: widget novo: polygon. Tipo o XAMLPath. User pode configurar vários shapes em runtime.
 #   - pra cada shape, user vai configurando segmentos, fill color, stroke color, stroke thickness, etc.
-class WidgetSystem:
+class UISystem:
     """Represents a complete user-configurable UI and logic system.
 
     * Contains a Widget hierarchy for configuring the UI. The widgets are fully-configurable by the user.
@@ -111,14 +121,19 @@ class WidgetSystem:
     * User configuration is persisted in Nimbus' DataCache (key based on system name).
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, nodes: list[Node] = None):
         self.name = name
-        self.widgets: dict[str, BaseWidget] = {}
-        self._root_node = SystemRootNode(self)
-        self.edit_enabled = True
-        self.edit_window_title = "Edit Widgets System"
+        self.edit_enabled: bool = True
+        """If editing the graph is enabled in this system."""
+        self.edit_window_title = f"Edit {name} UISystem"
         self.node_editor = NodeEditor(self.render_node_editor_context_menu)
-        self.node_editor.nodes.append(self._root_node)
+        if nodes is None:
+            self._root_node = SystemRootNode(self)
+            self.node_editor.nodes.append(self._root_node)
+        else:
+            self._root_node: SystemRootNode = nodes[0]
+            self._root_node.system = self
+            self.node_editor.nodes = nodes
 
     @property
     def root_widget(self) -> BaseWidget:
@@ -130,118 +145,31 @@ class WidgetSystem:
         self._root_node.widget_root.child = root
 
     def render(self):
-        ComputerSystem().timed_update(self._root_node.delta_time)
-
+        """Renders this system in the current region."""
         self._root_node.on_update.trigger()
 
-        imgui.begin_child("AppRootWidget")
+        imgui.begin_child(f"{repr(self)}AppRootWidget")
         if self.root_widget is not None:
             self.root_widget._set_pos_and_size()
             self.root_widget.render()
         else:
-            if self.edit_enabled and imgui.begin_popup_context_window("CreateRootWidgetMenu"):
+            if self.edit_enabled and imgui.begin_popup_context_window(f"{repr(self)}CreateRootWidgetMenu"):
                 imgui.text("Create Root Widget:")
                 self.render_create_widget_menu()
                 imgui.end_popup()
         imgui.end_child()
 
-        if not self.edit_enabled:
-            if imgui.begin_popup("AppRootNoEditMenu"):
-                if imgui.button("Open EDIT Mode?"):
-                    self.edit_enabled = True
-                lines = [
-                    "EDIT Mode opens a separate window for editing your widget settings,",
-                    "and allow right-click interaction with some widgets.",
-                    "\n\nClose the EDIT window to close the EDIT Mode and go back to normal widgets display."
-                ]
-                imgui.set_item_tooltip(" ".join(lines))
-                imgui.end_popup()
-            if imgui.is_mouse_clicked(imgui.MouseButton_.right):
-                # NOTE: For some reason, the `imgui.begin_popup_context_*` functions were not working here...
-                # Had to do this to open the popup manually.
-                imgui.open_popup("AppRootNoEditMenu", imgui.PopupFlags_.mouse_button_right)
-        else:
-            edit_window_flags = imgui.WindowFlags_.no_collapse
-            opened, self.edit_enabled = imgui.begin(self.edit_window_title, self.edit_enabled, edit_window_flags)
-            if opened:
-                self.render_edit_window()
-            imgui.end()
+    def render_edit(self):
+        """Renders the contents of the system edit window.
 
-    def render_edit_window(self):
-        """Renders the contents of the system edit window."""
+        This draws the system's graph editor, and as such would benefit from a large window/region to render in.
+        """
         self.node_editor.render_system()
 
-    @classmethod
-    def load_from_cache(cls, name: str) -> 'WidgetSystem':
-        """Loads a WidgetSystem object from the DataCache.
-
-        If the system doesn't exist, its instance will be created.
-
-        Args:
-            name (str): name of WidgetSystem to load/create.
-
-        Returns:
-            WidgetSystem: the loaded (or created) WidgetSystem instance.
-        """
-        cache = DataCache()
-        system = cache.get_custom_cache(f"WidgetSystem_{name}")
-        if system is None:
-            system = cls(name)
-        return system
-
-    def save_to_cache(self):
-        """Saves this WidgetSystem instance to the DataCache, thus persisting its data for future use. Cache key is based on our name."""
-        cache = DataCache()
-        cache.save_custom_cache(f"WidgetSystem_{self.name}", self)
-
-    def register_widget(self, widget: BaseWidget):
-        """Registers the given widget with this system.
-
-        Sets the widget's root system as this system, and adds it to our table of widgets.
-        If we didn't have a root widget, this widget will be set as the root.
-
-        Args:
-            widget (BaseWidget): the widget to register
-
-        Returns:
-            bool: True if the widget was successfully registered to us, or was already registered to us.
-            False otherwise (a different widget with same ID already exists).
-        """
-        if widget.id in self.widgets:
-            return self.widgets[widget.id] == widget
-        if widget.system is not None:
-            widget.system.deregister_widget(widget)
-        widget.system = self
-        self.widgets[widget.id] = widget
-        self.node_editor.add_node(widget)
-        if self.root_widget is None:
-            self.root_widget = widget
-        return True
-
-    def deregister_widget(self, widget: BaseWidget):
-        """Deregisters the given widget from this system.
-
-        This should only be used internally by ``register_widget()`` when change a widget between systems,
-        since a widget without a root system may lead to errors.
-        This sets ``widget.system = None``.
-
-        Args:
-            widget (BaseWidget): the widget to remove.
-
-        Returns:
-            bool: True if the widget was successfully deregistered from us.
-            False otherwise (widget was not registered to us).
-        """
-        if widget.system != self or widget.id not in self.widgets:
-            return False
-        if self.widgets[widget.id] != widget:
-            return False
-        self.widgets.pop(widget.id)
-        self.node_editor.remove_node(widget)
-        widget.system = None
-        if self.root_widget == widget:
-            self.root_widget = None
-        return True
+    def save_config(self):
+        """Saves this UISystem's config to the UIManager singleton, thus persisting its data for future use."""
+        manager = UIManager()
+        manager.update_system(self)
 
     def render_create_widget_menu(self, accepted_bases: list[type[BaseWidget]] = [BaseWidget]) -> BaseWidget | None:
         """Renders the contents for a menu that allows the user to create a new widget, given the possible options.
@@ -262,8 +190,6 @@ class WidgetSystem:
             new_child = object_creation_menu(cls, lambda cls: cls.__name__.replace("Widget", ""))
             if new_child is not None:
                 break
-        if new_child:
-            self.register_widget(new_child)
         return new_child
 
     def render_create_action_menu(self) -> actions.Action | None:

@@ -321,11 +321,6 @@ class Panel(ContainerWidget):
             self.fill_borders_with_rects()
         imgui.set_item_tooltip(self.fill_borders_with_rects.__doc__)
 
-    def _on_system_changed(self):
-        super()._on_system_changed()
-        for slot in self._fixed_slots:
-            slot.child.system = self.system
-
     def __setstate__(self, state: dict[str]):
         super().__setstate__(state)
         for pin in self._fixed_slots:

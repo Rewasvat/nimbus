@@ -3,7 +3,7 @@
 # this module from anywhere.
 
 # Basic Widget types
-from nimbus.utils.imgui.widgets.system import WidgetSystem
+from nimbus.utils.imgui.widgets.system import UISystem, UIManager
 from nimbus.utils.imgui.widgets.base import BaseWidget, LeafWidget, ContainerWidget
 
 # Container Widget Types

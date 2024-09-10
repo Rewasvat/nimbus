@@ -8,7 +8,7 @@ from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, PinKind, output_pr
 import nimbus.utils.imgui.type_editor as types
 
 if TYPE_CHECKING:
-    from nimbus.utils.imgui.widgets.system import WidgetSystem
+    from nimbus.utils.imgui.widgets.system import UISystem
 
 
 class WidgetColors:
@@ -96,12 +96,10 @@ class BaseWidget(Node):
         self._name: str = ""
         self.slot: Slot = None
         """Parent slot containing this widget. Might be None."""
-        self._system: WidgetSystem = None
-        """Root System managing this widget."""
         self._area: Vector2 = Vector2()  # TODO: talvez tirar isso pq puxa do slot
         self._pos: Vector2 = Vector2()
         self.editable = True
-        """If this widget is editable by the user during runtime. Depends on our WidgetSystem having edit enabled."""
+        """If this widget is editable by the user during runtime. Depends on our UISystem having edit enabled."""
         self.interactive = True
         """If this widget's common user interaction (via ``self._handle_interaction()``) is enabled."""
         self.edit_ignored_properties: set[str] = {"this"}
@@ -131,14 +129,21 @@ class BaseWidget(Node):
         self._name = value
 
     @property
-    def system(self):
-        """Root System managing this widget."""
-        return self._system
+    def system(self) -> 'UISystem':
+        """Root System managing this widget.
 
-    @system.setter
-    def system(self, value):
-        self._system = value
-        self._on_system_changed()
+        This follows our parent hierarchy until it reaches the root node in order to find the owning System.
+        As such, this might return None in cases where the widget is "root-less" (no connection to the root).
+        """
+        if self.slot is not None:
+            return self.slot.parent_node.system
+        # If we have a parent slot, then we're connected to another widget, not to the root node.
+        if self.parent_pin.is_linked_to_any():
+            from nimbus.utils.imgui.widgets.system import SystemRootPin
+            link = self.parent_pin.get_all_links()[0]
+            parent_pin = link.start_pin
+            if isinstance(parent_pin, SystemRootPin):
+                return parent_pin.parent_node.system
 
     @property
     def position(self):
@@ -165,7 +170,7 @@ class BaseWidget(Node):
         """The position of this widget's bottom-right corner. [GET]"""
         return self._pos + self._area
 
-    @output_property()
+    @output_property(use_prop_value=True)
     def this(self):
         """The widget itself (same as ``self``).
 
@@ -185,7 +190,7 @@ class BaseWidget(Node):
     def render_edit_details(self):
         """Renders the contents to EDIT this widget through imgui.
 
-        This can be called by ``self.render_full_edit()``, our WidgetSystem or others sources in order to allow editing this widget.
+        This can be called by ``self.render_full_edit()``, our UISystem or others sources in order to allow editing this widget.
 
         The BaseWidget default implementation does the following:
         * Displays the widget's ID for identification. The ID's text tooltip show the widget class's docstring.
@@ -237,11 +242,9 @@ class BaseWidget(Node):
         imgui.end_popup()
 
     def delete(self):
-        """Deletes this widget, removing it from its parent (if any), and deregistering it from our root WidgetSystem."""
+        """Deletes this widget, removing it from its parent (if any), and deregistering it from our root UISystem."""
         super().delete()
         self.reparent_to(None)
-        if self.system is not None:
-            self.system.deregister_widget(self)
 
     def reparent_to(self, slot: 'Slot' = None):
         """Changes our ``parent`` to the given value.
@@ -263,7 +266,7 @@ class BaseWidget(Node):
         """Handles common interaction for this widget. This should be called each frame on a ``render()``-like method.
 
         This creates a invisible-button (purely for interaction without visual) in imgui, expanding across the whole current
-        content available region. If our WidgetSystem root has editing enabled, also allows right-clicking to open our edit-menu
+        content available region. If our UISystem root has editing enabled, also allows right-clicking to open our edit-menu
         (using ``self.open_edit_menu()``).
 
         If ``self.interactive`` is False, this will do nothing and always return False.
@@ -303,13 +306,6 @@ class BaseWidget(Node):
             size = Vector2(*imgui.get_content_region_avail())
         self._area = size
         self._pos = pos
-
-    def _on_system_changed(self):
-        """Internal callback called when our ``system`` attribute changes.
-
-        Subclasses may override this to implement their own logic. Default implementation in BaseWidget does nothing.
-        """
-        pass
 
     def __str__(self):
         return f"{self.id}:{self.name}"
@@ -391,8 +387,6 @@ class Slot(NodePin):
             self._child.reparent_to()
         self._child = value
         if value is not None:
-            if self.parent_node.system:
-                self.parent_node.system.register_widget(value)
             value.reparent_to(self)
 
     def render(self):
@@ -440,7 +434,7 @@ class Slot(NodePin):
     def draw_open_slot_menu(self):
         """Allows opening a context-menu popup with right-click in this (empty) slot.
 
-        The context-menu will render this slot's parent full-edit-menu, as well as the WidgetSystem's create new widget menu
+        The context-menu will render this slot's parent full-edit-menu, as well as the UISystem's create new widget menu
         to allow creating a new widget in this slot.
 
         The created child (if any) is automatically added as the child of this slot.
@@ -651,12 +645,6 @@ class ContainerWidget(BaseWidget):
         Default implementation on ContainerWidget does nothing. Subclasses should override this as needed.
         """
         pass
-
-    def _on_system_changed(self):
-        super()._on_system_changed()
-        for slot in self._slots:
-            if slot.child:
-                slot.child.system = self.system
 
     def __iter__(self) -> Iterator[BaseWidget]:
         return iter(self.get_children())
