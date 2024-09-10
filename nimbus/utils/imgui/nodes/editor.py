@@ -27,19 +27,6 @@ def get_all_links_from_nodes(nodes: list[Node]):
 #   - testar o role de shortcuts do imgui-node-editor
 # TODO: esquema de salvar estado pra ter CTRL+Z (UNDO)
 # TODO: atalho de teclado pro Fit To Window
-# TODO: melhorar serialização de dados dos nodes e afins.
-#   - atualmente, se alteramos algum node pra ter um atributo a mais e usar tal attr no render, vai crashar se carregar node
-#     desse tipo antes da alteracao.
-#   - ideias:
-#       - fazer classes de nodes e afins terem um metodo "setup/init" que seria basicamente o construtor: setando attrs default.
-#           - Usa isso no construtor e no setstate.
-#       - arrumar setstate()s pra rodarem o __init__ de tal classe pra setar as coisas default.
-#           - supostamente mais facil (nao precisa alterar um monte de classe), mas tem problemas:
-#           - como fazer com attrs que não podemos re-criar, como IDs e pins?
-#           - como saber quais args passar pro __init__()?
-#       * de qualquer jeito, saberiamos quais são os attrs expected da classe.
-#           - Poderiamos usar isso pra ignorar dados vindos do state que não correspondem a attrs.
-#           - eles seriam attrs deletados da classe
 class NodeEditor:
     """Represents a Node Editor system.
 
@@ -83,6 +70,7 @@ class NodeEditor:
         """
         if node not in self.nodes:
             self.nodes.append(node)
+            node.editor = self
 
     def remove_node(self, node: Node):
         """Removes the given node from this NodeEditor. The node will no longer be shown in the editor, and no longer updateable
@@ -93,6 +81,7 @@ class NodeEditor:
         """
         if node in self.nodes:
             self.nodes.remove(node)
+            node.editor = None
 
     def _compare_ids(self, a_id: AllIDTypes, b_id: AllIDTypes | int):
         """Compares a imgui-node-editor ID object to another to check if they match.
@@ -154,9 +143,14 @@ class NodeEditor:
             self.nodes = nodes
 
         flags = imgui.TableFlags_.borders_inner_v | imgui.TableFlags_.resizable
-        if imgui.begin_table("NodeEditorRootTable", 2, flags):
-            imgui.table_setup_column("DetailsPanel")
-            imgui.table_setup_column("NodesPanel")
+        if imgui.begin_table(f"{repr(self)}NodeEditorRootTable", 2, flags):
+            imgui.table_setup_column("Details", imgui.TableColumnFlags_.width_stretch, init_width_or_weight=0.25)
+            imgui.table_setup_column("System Graph")
+
+            # NOTE: Drawing the headers-row is a workaround for a bugfix here.
+            # We didn't want the headers since there's no need for it here, however it seems they are required: without the
+            # header-row, the node-editor graph gets weird clipping issues (mainly affecting content inside the first node).
+            imgui.table_headers_row()
 
             imgui.table_next_column()
             self.render_details_panel()
@@ -168,7 +162,7 @@ class NodeEditor:
 
     def render_details_panel(self):
         """Renders the side panel of this NodeEditor. This panel contains selection details and other info."""
-        imgui.begin_child("NodeEditorDetailsPanel")
+        imgui.begin_child(f"{repr(self)}NodeEditorDetailsPanel")
         has_selection = False
 
         for node in self.nodes:
@@ -186,7 +180,7 @@ class NodeEditor:
 
     def render_node_editor(self):
         """Renders the Imgui Node Editor part of this NodeEditor."""
-        imgui_node_editor.begin("NodeEditor")
+        imgui_node_editor.begin(f"{repr(self)}NodeEditor")
         backup_pos = imgui.get_cursor_screen_pos()
 
         # Step 1: Commit all known node data into editor
