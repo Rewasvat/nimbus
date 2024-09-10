@@ -80,10 +80,11 @@ class IDManager(metaclass=cmd_utils.Singleton):
     def __init__(self):
         cache = DataCache()
         self._cache_key = "IDManager_Generators"
-        self._generators: dict[str, IDGenerator] = cache.get_data(self._cache_key, {})
+        self._persisted_generators: dict[str, IDGenerator] = cache.get_data(self._cache_key, {})
+        self._session_generators: dict[str, IDGenerator] = {}
         cache.add_shutdown_listener(self.on_shutdown)
 
-    def get(self, name: str):
+    def get(self, name: str, persist=False):
         """Gets the persisted IDGenerator for the given name.
 
         If a generator doesn't exist for the name, a new instance will be created. If the name is valid,
@@ -91,19 +92,23 @@ class IDManager(metaclass=cmd_utils.Singleton):
 
         Args:
             name (str): name of generator to get.
+            persist (boolean, optional): if the IDGenerator is/will be persisted. Note that persisted and
+                non-persisted (session) generators are different instances, so you can have a generator with
+                same name in both, and both will be different objects.
 
         Returns:
             IDGenerator: a ID generator object.
         """
-        gen = self._generators.get(name, IDGenerator())
+        generators = self._persisted_generators if persist else self._session_generators
+        gen = generators.get(name, IDGenerator())
         if name:
-            self._generators[name] = gen
+            generators[name] = gen
         return gen
 
     def save(self):
         """Saves the data of this IDManager single (all of our ID Generators) do the DataCache."""
         cache = DataCache()
-        cache.set_data(self._cache_key, self._generators)
+        cache.set_data(self._cache_key, self._persisted_generators)
 
     def on_shutdown(self):
         """Callback for DataCache shutdown."""
