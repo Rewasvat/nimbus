@@ -138,6 +138,41 @@ class ImguiProperty(AdvProperty):
         self._editors = objects
         return objects
 
+    def get_value_from_obj(self, obj, owner: type | None = None):
+        """Gets the internal value of this property in the given OBJ.
+
+        This is similar to ``get_prop_value()``, but by default uses the property's getter, which may have been
+        updated by subclasses."""
+        return self.__get__(obj, owner)
+
+    def get_prop_value(self, obj, owner: type | None = None):
+        """Calls this property's getter on obj, to get its value.
+
+        This is the property's common behavior (``return obj.property``).
+        The Property subclasses (such as ImguiProperty or NodeDataProperty) may add logic to the getter, which is NOT called here.
+        """
+        return super().__get__(obj, owner)
+
+    def set_prop_value(self, obj, value):
+        """Calls this property's setter on obj to set the given value.
+
+        This is essentially calling ``obj.property = value``, with one important difference: this calls the BASE setter!
+        This does NOT call any extra logic that ImguiProperty subclasses may add to the setter method.
+        """
+        if self.fset:
+            return super().__set__(obj, value)
+
+    def restore_value(self, obj, value):
+        """Calls this property's setter on obj to set the given value.
+
+        This is meant to emulate the regular "set attribute" logic (``obj.property = value``).
+
+        While ``self.set_prop_value()`` calls the base setter specifically (and most likely should remain that way), this
+        method may be overwritten by subclasses to perform their proper logic when setting a value without the caller explicitly
+        using ``self.__set__()``. The default implementation in ImguiProperty uses ``set_prop_value()``.
+        """
+        return self.set_prop_value(obj, value)
+
     def get_value_type(self, obj=None):
         """Gets the type of this property (the type of its value).
 
@@ -895,7 +930,7 @@ def get_all_renderable_properties(cls: type) -> dict[str, ImguiProperty]:
         cls (type): the class to get all imgui properties from.
 
     Returns:
-        dict[str, ImguiTypeEditor]: a "property name" => "ImguiTypeEditor object" dict with all imgui properties.
+        dict[str,ImguiProperty]: a "property name" => "ImguiProperty object" dict with all imgui properties.
         All editors returned by this will have had their "parent properties" set accordingly.
     """
     return get_all_properties(cls, ImguiProperty)
@@ -910,8 +945,8 @@ def render_all_properties(obj, ignored_props: set[str] = None):
     Args:
         obj (any): the object to render all imgui properties.
         ignored_props (set[str], optional): a set (or any other object that supports ``X in IGNORED`` (contains protocol)) that indicates
-        property names that we should ignore when rendering their editors. This way, if the name of a imgui-property P is in ``ignored_props``,
-        its editor will not be rendered. Defaults to None (shows all properties).
+            property names that we should ignore when rendering their editors. This way, if the name of a imgui-property P is in ``ignored_props``,
+            its editor will not be rendered. Defaults to None (shows all properties).
 
     Returns:
         bool: If any property in the object was changed.

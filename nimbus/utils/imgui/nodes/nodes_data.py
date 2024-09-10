@@ -216,8 +216,16 @@ class DataPin(NodePin):
         if self.pin_kind == PinKind.input and self.is_linked_to_any():
             link = self.get_all_links()[0]
             value = link.start_pin.get_value()
+            value = self.state.correct_value(value)
         else:
-            value = self.state.get()
+            value = self.get_internal_value()
+        return value
+
+    def get_internal_value(self):
+        """Gets the value of this DataPin, WITHOUT considering links to other pins.
+        So this gets our own internal value, and not our "actual" value that may be set by a link (see ``get_value()``).
+        """
+        value = self.state.get()
         value = self.state.correct_value(value)
         return value
 
@@ -312,10 +320,10 @@ class NodeDataProperty(types.ImguiProperty):
         return pins
 
     def __get__(self, obj: Node, owner: type | None = None):
-        ret = self.get_prop_value(obj, owner)
         pin = self.get_pin(obj)
         if pin and not self.use_prop_value:
             return pin.get_value()
+        ret = self.get_prop_value(obj, owner)
         return ret
 
     def __set__(self, obj: Node, value):
@@ -326,22 +334,15 @@ class NodeDataProperty(types.ImguiProperty):
         else:
             self.set_prop_value(obj, value)
 
-    def get_prop_value(self, obj: Node, owner: type | None = None):
-        """Calls this property's getter on obj, to get its value.
+    def restore_value(self, obj, value):
+        # While in ImguiProperty we can't call __set__ directly, in NodeDataProperty we can.
+        return self.__set__(obj, value)
 
-        This is the property's common behavior (``return obj.property``).
-        The NodeDataProperty adds logic to the getter, which is not called here.
-        """
-        return super().__get__(obj, owner)
-
-    def set_prop_value(self, obj: Node, value):
-        """Calls this property's setter on obj to set the given value.
-
-        This is essentially calling ``obj.property = value``, with one important difference: this calls the BASE setter!
-        This does NOT call our associated DataPin ``set_value()`` method.
-        """
-        if self.fset:
-            return super().__set__(obj, value)
+    def get_value_from_obj(self, obj, owner: type | None = None):
+        pin = self.get_pin(obj)
+        if pin:
+            return pin.get_internal_value()
+        return super().get_value_from_obj(obj, owner)
 
     def get_pin(self, obj: Node):
         """Gets the DataPin associated with this property for the given owner Node.
