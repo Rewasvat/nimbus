@@ -15,11 +15,45 @@ class BasicWindow(hello_imgui.DockableWindow):
     """
 
     def __init__(self, title: str):
-        super().__init__(label_=title, gui_function_=self.render)
+        """Constructs a new BasicWindow with the given TITLE."""
+        super().__init__(label_=title, gui_function_=self._window_gui_render)
         self.children: list[BasicWindow] = []
         """The children window (dockable sub-windows) of this container."""
         self.has_menu = False
         """If this window has a top-menu to be rendered by its parent window. If so, our `self.render_top_menu()` will be called by the parent."""
+
+    @property
+    def user_closable(self):
+        """If this window can be closed by the user.
+
+        When true, an `X` button appears in the window's dock tab, besides its name. When clicked, it changes
+        ``self.is_visible`` to False.
+
+        This is equivalent to ``self.can_be_closed and (not self.call_begin_end)``, and when set will update both
+        attributes appropriately. This is required for the X button to work and set is_visible to False.
+        """
+        return self.can_be_closed and (not self.call_begin_end)
+
+    @user_closable.setter
+    def user_closable(self, value: bool):
+        self.can_be_closed = value
+        self.call_begin_end = not value
+
+    def _window_gui_render(self):
+        """Internal GUI Render function of this window.
+
+        Essentially this calls ``self.render()``, but in case ``self.call_begin_end`` is False will also perform our
+        own ``imgui.begin()/end()`` - this behavior is required for user-closeable windows (see ``self.user_closable``).
+
+        Not recommended to overwrite this in subclasses.
+        """
+        if self.call_begin_end:
+            self.render()
+        else:
+            opened, self.is_visible = imgui.begin(self.label, self.is_visible)
+            if opened:
+                self.render()
+            imgui.end()
 
     def render(self):
         """Renders the contents of this window.
@@ -27,7 +61,8 @@ class BasicWindow(hello_imgui.DockableWindow):
         Sub-classes should override this method to implement their own rendering. This default implementation calls render() on all children.
         """
         for child in self.children:
-            child.render()
+            if child.is_visible:
+                child.render()
 
     def render_top_menu(self):
         """Renders the contents of the window's top menu-bar.
@@ -85,6 +120,7 @@ class AppWindow(BasicWindow):
     """
 
     def __init__(self, title: str, mode: RunnableAppMode):
+        """Constructs a new AppWindow instance with the given TITLE and MODE."""
         super().__init__(title)
         self.mode = mode
         """The Runnable Mode of this App Window"""
@@ -120,6 +156,16 @@ class AppWindow(BasicWindow):
         """Enables 'viewports'.
 
         Viewports allow imgui windows to be dragged outside the AppWindow, becoming other OS GUI windows (with a imgui style).
+        """
+        self._pending_children: list[BasicWindow] = []
+        """List of child windows pending to add to this parent window.
+        This will be done (and this list cleared) at the ``on_pre_new_frame`` callback."""
+        self.auto_remove_invisible_children: bool = True
+        """If true (the default), the ``on_pre_new_frame`` callback will automatically remove from our ``self.children`` list
+        any child windows that are not visible.
+
+        Since windows that can be closed by the user are simply set as not visible when closed, this essentially removes windows
+        that have been closed by the user.
         """
 
     def run(self):
@@ -158,6 +204,7 @@ class AppWindow(BasicWindow):
         run_params.ini_folder_type = hello_imgui.IniFolderType.home_folder
         run_params.callbacks.before_exit = self.on_before_exit
         run_params.callbacks.post_init = self.on_init
+        run_params.callbacks.pre_new_frame = self.on_pre_new_frame
 
         run_params.fps_idling.enable_idling = True
         run_params.fps_idling.fps_idle = 1
@@ -244,6 +291,54 @@ class AppWindow(BasicWindow):
         Sub classes may override this to add their own exit logic. The default implementation does nothing.
         """
         pass
+
+    def on_pre_new_frame(self):
+        """Callback called each frame, but before IMGUI starts rendering the frame (that is, before ``imgui.new_frame()``).
+
+        Good place to execute code each frame that needs to be "outside" the imgui context.
+        Particularly, to add new child windows during runtime must be done here, if done in the ``render()`` it won't work.
+        See ``add_child_window()``.
+
+        The default implementation of this callback in AppWindow updates our child windows with new windows from ``add_child_window``.
+        """
+        # Add pending windows
+        run_params = hello_imgui.get_runner_params()
+        reset_dockable_windows = len(self._pending_children) > 0
+        for child in self._pending_children:
+            self.children.append(child)
+        self._pending_children.clear()
+        # Remove not-visible children
+        if self.auto_remove_invisible_children:
+            removed_windows = []
+            for child in self.children:
+                if not child.is_visible:
+                    removed_windows.append(child)
+                    reset_dockable_windows = True
+            for child in removed_windows:
+                self.children.remove(child)
+        # Update dockable children windows list
+        # NOTE: this has to be done this way, resetting the entire list. Changing the dockable_windows list
+        # with append/remove/etc doesn't work.
+        if reset_dockable_windows:
+            run_params.docking_params.dockable_windows = self.children
+
+    def add_child_window(self, child: BasicWindow):
+        """Adds a new child window to this AppWindow.
+
+        The window is initially added in a "pending" state. In the next frame it'll be updated to a proper
+        child, being rendered and so on.
+
+        Args:
+            child (BasicWindow): child to add
+
+        Returns:
+            bool: if child was added successfully. This may fail (returning False) if the given window is already
+            a child of this object.
+        """
+        if child not in self.children and child not in self._pending_children:
+            self._pending_children.append(child)
+            return True
+        return False
 
     def store_settings_on_cache(self):
         """Stores the IMGUI settings files in the DataCache, and removes them from the disk.
