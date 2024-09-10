@@ -216,16 +216,16 @@ class Node:
         Args:
             name (str): name to check for.
             pin_type (type[NodePin] | tuple[NodePin], optional): Type of pins to search for. If this is given, only pins of these types will
-            be checked against ``name`` for returning. This is the same arg as passed to ``class_or_tuple`` in ``isinstance(obj, class_or_tuple)``:
-            it can be a single Type object to check against, or a tuple or union of types to check against several types. If this is None
-            (the default), will check all pins (same as passing pin_type as ``NodePin``).
+                be checked against ``name`` for returning. This is the same arg as passed to ``class_or_tuple`` in ``isinstance(obj, class_or_tuple)``
+                : it can be a single Type object to check against, or a tuple or union of types to check against several types. If this is None
+                (the default), will check all pins (same as passing pin_type as ``NodePin``).
 
         Returns:
             NodePin: The pin with the given name, or None if no pin exists.
         """
         if pin_type is None:
             pin_type = NodePin
-        for pin in self._inputs:
+        for pin in self.get_input_pins():
             if pin.pin_name == name and isinstance(pin, pin_type):
                 return pin
 
@@ -235,16 +235,16 @@ class Node:
         Args:
             name (str): name to check for.
             pin_type (type[NodePin] | tuple[NodePin], optional): Type of pins to search for. If this is given, only pins of these types will
-            be checked against ``name`` for returning. This is the same arg as passed to ``class_or_tuple`` in ``isinstance(obj, class_or_tuple)``:
-            it can be a single Type object to check against, or a tuple or union of types to check against several types. If this is None
-            (the default), will check all pins (same as passing pin_type as ``NodePin``).
+                be checked against ``name`` for returning. This is the same arg as passed to ``class_or_tuple`` in ``isinstance(obj, class_or_tuple)``
+                : it can be a single Type object to check against, or a tuple or union of types to check against several types. If this is None
+                (the default), will check all pins (same as passing pin_type as ``NodePin``).
 
         Returns:
             NodePin: The pin with the given name, or None if no pin exists.
         """
         if pin_type is None:
             pin_type = NodePin
-        for pin in self._outputs:
+        for pin in self.get_output_pins():
             if pin.pin_name == name and isinstance(pin, pin_type):
                 return pin
 
@@ -255,7 +255,7 @@ class Node:
             pin (NodePin): pin to add to this node.
             index (int, optional): Optional index at which to insert the pin. If None the pin will just be appended to the list's end.
             before (NodePin, optional): Optional pre-existing pin to use as index. If this is given, the given ``pin`` will be inserted
-            just before this pin. Will raise ``ValueError`` if ``before`` is not a pin of this node, with the same kind as the given ``pin``.
+                just before this pin. Will raise ``ValueError`` if ``before`` is not a pin of this node, with the same kind as the given ``pin``.
         """
         pin_list = self._inputs if pin.pin_kind == PinKind.input else self._outputs
         if index is not None:
