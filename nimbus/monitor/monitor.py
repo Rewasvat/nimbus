@@ -420,10 +420,10 @@ class WidgetsTestApp(windows.AppWindow):
         # Remove system windows, if opened
         display_window = self.get_display_window(name)
         if display_window:
-            self.children.remove(display_window)
+            display_window.hide()
         edit_window = self.get_edit_window(name)
         if edit_window:
-            self.children.remove(edit_window)
+            edit_window.hide()
         click.secho(f"Deleted system {name}", fg="green")
 
     def open_system_display(self, name: str):

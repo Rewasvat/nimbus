@@ -55,6 +55,15 @@ class BasicWindow(hello_imgui.DockableWindow):
                 self.render()
             imgui.end()
 
+    def hide(self):
+        """Hides this window, setting ``self.is_visible`` to False.
+
+        If this window is being used as a child in a parent AppWindow, then hiding it will remove it from the
+        parent's list of children. If no other references exist, then this window object will be deleted.
+        This default behavior can be changed with the parent's ``AppWindow.auto_remove_invisible_children`` flag.
+        """
+        self.is_visible = False
+
     def render(self):
         """Renders the contents of this window.
 
