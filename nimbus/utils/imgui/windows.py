@@ -3,6 +3,7 @@ import json
 import click
 from enum import Enum
 from nimbus.data import DataCache
+from nimbus.utils.imgui.math import Vector2
 from imgui_bundle import imgui, immapp
 from imgui_bundle import hello_imgui, imgui_node_editor  # type: ignore
 
@@ -21,6 +22,24 @@ class BasicWindow(hello_imgui.DockableWindow):
         """The children window (dockable sub-windows) of this container."""
         self.has_menu = False
         """If this window has a top-menu to be rendered by its parent window. If so, our `self.render_top_menu()` will be called by the parent."""
+        self.force_size: Vector2 = None
+        """Sets a forced size for this window.
+
+        Before the window's ``imgui.begin()`` call at the next frame, ``imgui.set_next_window_size()`` will be used with this size in order to update
+        the window's size. This attribute is then reset to None, and have no effect. At any time it can be given a new Vector2 value in order to force
+        a new size change.
+
+        This is best used when ``self.call_begin_end = False``.
+        """
+        self.force_dock_id: imgui.ID = None
+        """Sets a forced Dock ID for this window.
+
+        Before the window's ``imgui.begin()`` call at the next frame, ``imgui.set_next_window_dock_id()`` will be used with this dock ID in order to
+        update where the window is docked at. This attribute is then reset to None, and have no effect. At any time it can be given a new ID value in
+        order to force to change the parent-dock space.
+
+        This is best used when ``self.call_begin_end = False``.
+        """
 
     @property
     def user_closable(self):
@@ -47,9 +66,17 @@ class BasicWindow(hello_imgui.DockableWindow):
 
         Not recommended to overwrite this in subclasses.
         """
-        if self.call_begin_end:
+        has_force_window_attr = (self.force_size is not None) or (self.force_dock_id is not None)
+        if self.call_begin_end and (not has_force_window_attr):
             self.render()
         else:
+            if self.force_size is not None:
+                imgui.set_next_window_size(self.force_size)
+                self.force_size = None
+            if self.force_dock_id is not None:
+                imgui.set_next_window_dock_id(self.force_dock_id)
+                self.force_dock_id = None
+
             opened, self.is_visible = imgui.begin(self.label, self.is_visible)
             if opened:
                 self.render()

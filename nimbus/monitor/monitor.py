@@ -436,6 +436,7 @@ class WidgetsTestApp(windows.AppWindow):
         if self.update_opened_system(name) and not self.has_display_window(name):
             window = MonitorDisplaySystemWindow(name, self)
             self.add_child_window(window)
+            window.force_dock_id = imgui.get_window_dock_id()
 
     def get_display_window(self, name: str):
         """Gets a System Display window for the given system NAME, if opened."""
@@ -461,6 +462,7 @@ class WidgetsTestApp(windows.AppWindow):
         if self.update_opened_system(name) and not self.has_edit_window(name):
             window = MonitorEditSystemWindow(name, self)
             self.add_child_window(window)
+            window.force_dock_id = imgui.get_window_dock_id()
 
     def get_edit_window(self, name: str):
         """Gets a System Edit window for the given system NAME, if opened."""
