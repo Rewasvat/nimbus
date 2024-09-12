@@ -94,11 +94,11 @@ class BasicWindow(hello_imgui.DockableWindow):
     def render(self):
         """Renders the contents of this window.
 
-        Sub-classes should override this method to implement their own rendering. This default implementation calls render() on all children.
+        Sub-classes should override this method to implement their own rendering. This default implementation does nothing.
+        A Dock AppWindow automatically (internally, thanks to hello-imgui) calls its children gui_function()s, so there's no
+        need to render children windows manually here.
         """
-        for child in self.children:
-            if child.is_visible:
-                child.render()
+        pass
 
     def render_top_menu(self):
         """Renders the contents of the window's top menu-bar.

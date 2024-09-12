@@ -363,7 +363,6 @@ class WidgetsTestApp(windows.AppWindow):
             self.close()
         if self._in_edit_mode:
             self.update_closed_systems()
-            super().render()
         else:
             # TODO: this
             if self.system is not None:
@@ -401,8 +400,9 @@ class WidgetsTestApp(windows.AppWindow):
         system = UISystem(name)
         self.opened_systems[name] = system
         self.system_manager.update_system(system)
-        self.open_system_display(name)
-        self.open_system_edit(name)
+        this_dock_id = imgui.get_window_dock_id()
+        self.open_system_display(name).force_dock_id = this_dock_id
+        self.open_system_edit(name).force_dock_id = this_dock_id
         click.secho(f"Created new system {name}!", fg="green")
         return True
 
@@ -436,7 +436,7 @@ class WidgetsTestApp(windows.AppWindow):
         if self.update_opened_system(name) and not self.has_display_window(name):
             window = MonitorDisplaySystemWindow(name, self)
             self.add_child_window(window)
-            window.force_dock_id = imgui.get_window_dock_id()
+            return window
 
     def get_display_window(self, name: str):
         """Gets a System Display window for the given system NAME, if opened."""
@@ -462,7 +462,7 @@ class WidgetsTestApp(windows.AppWindow):
         if self.update_opened_system(name) and not self.has_edit_window(name):
             window = MonitorEditSystemWindow(name, self)
             self.add_child_window(window)
-            window.force_dock_id = imgui.get_window_dock_id()
+            return window
 
     def get_edit_window(self, name: str):
         """Gets a System Edit window for the given system NAME, if opened."""
