@@ -446,34 +446,3 @@ class NodeEditor:
         """Changes the editor's viewport position and zoom in order to make all content in the editor
         fit in the window (the editor's area)."""
         imgui_node_editor.navigate_to_content()
-
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        state = vars(self).copy()
-        state["_create_new_node_to_pin"] = None
-        state["_selected_menu_node"] = None
-        state["_selected_menu_pin"] = None
-        state["_selected_menu_link"] = None
-        state["__picklestate_all_links"] = get_all_links_from_nodes(self.nodes)
-        return state
-
-    def __setstate__(self, state: dict[str]):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
-
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        links: list[NodeLink] = state.pop("__picklestate_all_links")
-        self.__dict__.update(state)
-        for node in self.nodes:
-            node.editor = self
-        for link in links:
-            # Update link with its pins
-            link.start_pin = self.find_pin(link.start_pin)
-            link.end_pin = self.find_pin(link.end_pin)
-            # Update pins with the link
-            link.start_pin._links[link.end_pin] = link
-            link.end_pin._links[link.start_pin] = link

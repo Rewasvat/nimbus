@@ -47,10 +47,9 @@ class AxisList(ContainerWidget):
         if slices is None or len(slices) <= 0:
             slices = [1.0]
         self._slot_class = AxisListSlot
-        if not self._is_unpickling():
-            self._slots = [AxisListSlot(self, f"#{i+1}", s) for i, s in enumerate(slices)]
-            self.slot_counter = len(self._slots)
-            self._is_horizontal: bool = is_horizontal
+        self._slots = [AxisListSlot(self, f"#{i+1}", s) for i, s in enumerate(slices)]
+        self.slot_counter = len(self._slots)
+        self._is_horizontal: bool = is_horizontal
         self._margin: float = 0.0
         self._only_accept_leafs = False
 

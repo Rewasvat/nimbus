@@ -116,10 +116,9 @@ class BaseWidget(Node):
         self.enabled = True
         """If this widget is enabled. Disabled widgets are not rendered by their parents."""
         self.node_title = None  # we want to use the str(self) default
-        if not self._is_unpickling():
-            self.parent_pin = WidgetParentPin(self)
-            self.add_pin(self.parent_pin)
-            self.create_data_pins_from_properties()
+        self.parent_pin = WidgetParentPin(self)
+        self.add_pin(self.parent_pin)
+        self.create_data_pins_from_properties()
 
     @property
     def id(self):

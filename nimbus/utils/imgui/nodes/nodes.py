@@ -3,7 +3,6 @@ from typing import Callable, TYPE_CHECKING
 from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.math import Vector2, Rectangle
 from nimbus.utils.idgen import IDManager
-from nimbus.utils.utils import initialize_object, is_unpickling
 from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 
 if TYPE_CHECKING:
@@ -35,8 +34,7 @@ class Node:
     """
 
     def __init__(self):
-        if not self._is_unpickling():
-            self.node_id = imgui_node_editor.NodeId(nodes_id_generator().create())
+        self.node_id = imgui_node_editor.NodeId(nodes_id_generator().create())
         self.can_be_deleted = True
         """If this object can be deleted by user-interaction."""
         self.is_selected = False
@@ -65,7 +63,7 @@ class Node:
 
     @property
     def node_area(self) -> Rectangle:
-        """Gets the node's area (position and size).
+        """Gets the node's area (position and size) in the graph editor.
         This is the rectangle that bounds the node."""
         pos = imgui_node_editor.get_node_position(self.node_id)
         size = imgui_node_editor.get_node_size(self.node_id)
@@ -456,41 +454,6 @@ class Node:
         """
         return {}
 
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        state = vars(self).copy()
-        state["node_id"] = self.node_id.id()
-        state["editor"] = None  # NodeEditor handles re-setting our editor attribute
-        return state
-
-    def __setstate__(self, state: dict[str]):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
-
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        initialize_object(self, state)
-        self.node_id = imgui_node_editor.NodeId(state["node_id"])
-        for pin in self.get_input_pins() + self.get_output_pins():
-            pin._update_state_after_recreation(self)
-
-    def _is_unpickling(self):
-        """Checks if this Node is being unpickled.
-
-        This only applies inside the ``__init__()`` method.
-        When a node is unpickled, the ``__setstate__()`` calls its init() without arguments to setup default attributes.
-        The ``__init__()`` implementation may use this to check if its being unpickled, and change initialization behavior accordingly, such as
-        not creating NodePins or other complex objects that should not be spuriously created just to then be changed by the ``__setstate__()``
-        finising unpickling the object.
-
-        Setting up default attributes like this, even when unpickling, can help easily solve problems that arise when changing a class and then
-        unpickling an object from a previous version of that class.
-        """
-        return is_unpickling(self)
-
 
 PinKind = imgui_node_editor.PinKind
 """Alias for ``imgui_node_editor.PinKind``: enumeration of possible pin kinds."""
@@ -748,37 +711,6 @@ class NodePin:
         self.delete_all_links()
         nodes_id_generator().recycle(self.pin_id.id())
 
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        state = vars(self).copy()
-        state["pin_id"] = self.pin_id.id()
-        state["parent_node"] = None  # Node re-creating us should handle setting parent_node.
-        state["_links"] = {}  # NodeEditor handles re-creating all links, since each link needs at least 2 nodes/pins to be already recreated.
-        return state
-
-    def __setstate__(self, state: dict[str]):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
-
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        self.__dict__.update(state)
-        self.pin_id = imgui_node_editor.PinId(state["pin_id"])
-
-    def _update_state_after_recreation(self, parent: Node):
-        """Internal method to update state of this Pin instance after recreation (unpickling).
-        This is called by the parent node to update its pins' state after it (the node) is ready.
-
-        NOTE: not to be called outside ``Node.__setstate__`` chains.
-
-        Args:
-            parent (Node): parent node that is recreating this pin.
-        """
-        self.parent_node = parent
-
 
 class NodeLink:
     """The connection between an input and output pins on two different nodes.
@@ -842,24 +774,3 @@ class NodeLink:
 
     def __str__(self):
         return f"({self.start_pin})== link to =>({self.end_pin})"
-
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        state = vars(self).copy()
-        state["link_id"] = self.link_id.id()
-        state["start_pin"] = self.start_pin.pin_id.id()
-        state["end_pin"] = self.end_pin.pin_id.id()
-        return state
-
-    def __setstate__(self, state: dict[str]):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
-
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        self.__dict__.update(state)
-        # NodeEditor handles recreating all links, after all nodes/pins are recreated.
-        self.link_id = imgui_node_editor.LinkId(state["link_id"])

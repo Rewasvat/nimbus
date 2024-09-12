@@ -98,25 +98,6 @@ class DataPinState:
         """Deletes this pin state. Called when the parent pin is deleted."""
         pass
 
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        state = vars(self).copy()
-        if isinstance(self.editor, types.NoopEditor):
-            # TODO: how to properly persist noop editor objects? They fail to pickle because the decorator creates local classes.
-            state["editor"] = None
-        return state
-
-    def __setstate__(self, state: dict[str]):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
-
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        self.__dict__.update(state)
-
 
 # TODO: permitir tipo generic (qualquer coisa), consegue linkar com qualquer outro DataPin
 # TODO: suportar update automatico da cor do pin de acordo com o tipo/editor do valor(state). Isso ajudaria com pins dinamicos que podem
@@ -448,25 +429,6 @@ class DataPropertyState(DataPinState):
 
     def subtypes(self):
         return self.property.get_value_subtypes()
-
-    def __getstate__(self):
-        state = super().__getstate__()
-        if self.property.use_prop_value:
-            # No need to save our value if we directly use the value from the property.
-            state["value"] = None
-        # We need the parent-node and property name in order to recreate the property object on unpickling.
-        # The name we already have (our self.name). Doing this of storing the parent-node directly to ensure we can get/use it in self.__setstate__()
-        state["_property"] = self.parent_node
-        return state
-
-    def __setstate__(self, state: dict[str]):
-        super().__setstate__(state)
-        parent_node = self._property
-        props: dict[str, NodeDataProperty] = get_all_properties(type(parent_node), NodeDataProperty)
-        self._property = props[self.name]
-        self._property.data_pins[parent_node] = self.parent_pin
-        if self.editor and self._property:
-            self._property.editors[parent_node] = self.editor
 
 
 class DynamicAddInputPin(DataPin):

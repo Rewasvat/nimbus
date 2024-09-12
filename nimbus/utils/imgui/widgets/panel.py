@@ -43,34 +43,33 @@ class Panel(ContainerWidget):
         self._use_absolute_values = False
         self._color_border_childs = True
 
-        if not self._is_unpickling():
-            self._fixed_slots = [Slot(self, name) for name in base_names]
-            self.corners = [
-                Corner(CornerType.TOP_LEFT),
-                Corner(CornerType.TOP_RIGHT),
-                Corner(CornerType.BOTTOM_LEFT),
-                Corner(CornerType.BOTTOM_RIGHT),
-            ]
-            self.borders = {
-                PanelBorders.TOP: Slot(self, "Top Border"),
-                PanelBorders.BOTTOM: Slot(self, "Bottom Border"),
-                PanelBorders.LEFT: Slot(self, "Left Border"),
-                PanelBorders.RIGHT: Slot(self, "Right Border"),
-            }
+        self._fixed_slots = [Slot(self, name) for name in base_names]
+        self.corners = [
+            Corner(CornerType.TOP_LEFT),
+            Corner(CornerType.TOP_RIGHT),
+            Corner(CornerType.BOTTOM_LEFT),
+            Corner(CornerType.BOTTOM_RIGHT),
+        ]
+        self.borders = {
+            PanelBorders.TOP: Slot(self, "Top Border"),
+            PanelBorders.BOTTOM: Slot(self, "Bottom Border"),
+            PanelBorders.LEFT: Slot(self, "Left Border"),
+            PanelBorders.RIGHT: Slot(self, "Right Border"),
+        }
 
-            self._child_slot = Slot(self, "Content")
-            self._child_slot.can_be_deleted = False
-            self._slots.append(self._child_slot)
+        self._child_slot = Slot(self, "Content")
+        self._child_slot.can_be_deleted = False
+        self._slots.append(self._child_slot)
 
-            for i, corner in enumerate(self.corners):
-                self._fixed_slots[i].child = corner
-                c = corner.type.name.lower()
-                c = "".join([p.capitalize() for p in c.split("_")])
-                corner.name = f"{self.id}-{c}Corner"
-                corner.editable = False
-            for border in self.borders.values():
-                border.can_be_deleted = False
-                self._slots.append(border)
+        for i, corner in enumerate(self.corners):
+            self._fixed_slots[i].child = corner
+            c = corner.type.name.lower()
+            c = "".join([p.capitalize() for p in c.split("_")])
+            corner.name = f"{self.id}-{c}Corner"
+            corner.editable = False
+        for border in self.borders.values():
+            border.can_be_deleted = False
+            self._slots.append(border)
 
     # Editable Properties
     @types.enum_property()
@@ -320,12 +319,6 @@ class Panel(ContainerWidget):
         if menu_item("Fill Borders with Rects"):
             self.fill_borders_with_rects()
         imgui.set_item_tooltip(self.fill_borders_with_rects.__doc__)
-
-    def __setstate__(self, state: dict[str]):
-        super().__setstate__(state)
-        for pin in self._fixed_slots:
-            # These slots are not returned by get_output_slots(), so manually update them here.
-            pin._update_state_after_recreation(self)
 
     # Dynamic Editor Updaters
     def _update_border_width_ratio_editor(self, editor: types.FloatEditor):
