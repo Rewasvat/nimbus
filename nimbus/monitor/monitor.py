@@ -615,7 +615,7 @@ class MonitorEditSystemWindow(windows.BasicWindow):
         self.user_closable = True
         self.parent = parent
         self.system_name = system_name
-        self._perform_fit = True
+        self._perform_fit = 3
 
     def render(self):
         region_id = repr(self)
@@ -624,9 +624,11 @@ class MonitorEditSystemWindow(windows.BasicWindow):
         system = self.parent.opened_systems.get(self.system_name)
         if system:
             system.render_edit()
-            if self._perform_fit:
+            if self._perform_fit > 0:
+                # This is being done for 3 frames since using a boolean to trigger this in a single frame wasn't working on the first time
+                # this window was opened in a session.
                 system.node_editor.fit_to_window()
-                self._perform_fit = False
+                self._perform_fit -= 1
         else:
             imgui.text_colored(Colors.red, "SYSTEM NOT INITIALIZED")
         imgui.pop_id()
