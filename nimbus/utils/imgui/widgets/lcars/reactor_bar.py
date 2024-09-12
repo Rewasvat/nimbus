@@ -179,7 +179,7 @@ class ReactorBar(LeafWidget):
         else:
             ratio = self._xaml_scale.swapped_axis().aspect_ratio()
         ratio = 1.0 / ratio
-        reactor_area = self.slot.area.get_inner_rect(ratio)
+        reactor_area = self.area.get_inner_rect(ratio)
 
         draw = imgui.get_window_draw_list()
         self.bottom_bar.area = reactor_area

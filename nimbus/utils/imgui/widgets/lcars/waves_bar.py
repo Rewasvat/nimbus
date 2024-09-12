@@ -129,7 +129,7 @@ class WavesBar(LeafWidget):
         else:
             ratio = self._xaml_scale.swapped_axis().aspect_ratio()
         ratio = 1.0 / ratio
-        waves_area = self.slot.area.get_inner_rect(ratio)
+        waves_area = self.area.get_inner_rect(ratio)
 
         self.left_bar.area = waves_area
         self.left_bar.value = self.left_value
