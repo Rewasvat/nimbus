@@ -19,7 +19,21 @@ class PinLinkConfig:
         self.other_pin_name: str = other_pin_name
 
     def instantiate(self, node: Node, refs_table: dict[str, Node]):
-        """TODO"""
+        """Creates a new link in the given NODE based on this configuration.
+
+        The other node point of this link is expected to already be created and stored in the `refs_table`.
+        If it isn't, then this will do nothing. But that means this node is the first node of the link to
+        be recreated, and then when the other node is recreated, he will be able to run this and recreate
+        their links.
+
+        Thus, to properly recreate links between nodes its recommended to save/recreate a UISystem directly
+        with the SystemConfig class.
+
+        Args:
+            node (Node): _description_
+            refs_table (dict[str, Node]): a "reference ID" -> Node table. This is used to keep track
+            of instantiated Nodes in order to recreate the expected links between them.
+        """
         other_node = refs_table.get(self.other_ref_id)
         if other_node is None:
             # Other node wasn't re-created yet. When it is, it'll retry this and will succeed.
@@ -140,7 +154,24 @@ class NodeConfig:
         self._links_info: list[PinLinkConfig] = links_info
 
     def instantiate(self, refs_table: dict[str, Node]):
-        """TODO"""
+        """Creates a new Node object based on this config.
+
+        The node will be of the class expected by this config (most likely a subclass of Node),
+        and will have all its relevant properties reset to the values of this config. The node's
+        `setup_from_config()`, if any, is also executed.
+
+        Finally, all links expected of this node are also recreated. For this to work, we depend
+        on the `refs_table` argument. Because of this, to save the configuration of a group of Nodes
+        and thus save their links its best to use the `UISystem` and its `SystemConfig` directly.
+
+        Args:
+            refs_table (dict[str, Node]): a "reference ID" -> Node table. This is used to keep track
+            of instantiated Nodes in order to recreate the expected links between them.
+
+        Returns:
+            Node: the new Node object, or existing Node object if our ref-ID already exists in the
+            given `refs_table`.
+        """
         if self._ref_id in refs_table:
             return refs_table[self._ref_id]
 
@@ -192,7 +223,11 @@ class SystemConfig:
         return len(self._nodes_configs)
 
     def instantiate(self):
-        """TODO"""
+        """Creates a new UISystem instance based on this config.
+
+        Returns:
+            UISystem: new instance
+        """
         # Recreate all our nodes
         refs_table = {}
         nodes: list[Node] = []

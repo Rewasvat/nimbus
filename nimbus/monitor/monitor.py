@@ -294,14 +294,6 @@ class MonitorAppData:
         return obj
 
 
-# TODO: ter uma lista de UISystem existente, e ai:
-#   - permitir user escolher qual system vai ver/editar
-#   - permitir user criar/deletar system (ao deletar um system, reciclar todos nodes/pins/links)
-#   - deixar só um system carregado por vez. (vai precisar de algum delete()/clear() no UISystem pra deletar todos seus nodes,
-#     pros Sensores limpares os InternalSensor...)
-#   - isso pode casar com a idéia de ter um Node que roda um graph internamente, pra poder separar coisas em grafos diferentes.
-#     então ai probs seria numa classe-singleton a parte... e melhor pensar melhor nisso.
-#       - poderia ter problemas com SensorNodes por exemplo, já que atualmente só pode existir 1 deles por sensor-ID
 # TODO: refatorar MonitorApp pra ter 2 modos de display: EDIT e DISPLAY (names pending)
 #   * DISPLAY:
 #       - unica borderless-window, mostra só o UISystem selecionado.

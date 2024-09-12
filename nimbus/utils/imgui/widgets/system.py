@@ -103,7 +103,6 @@ class SystemRootNode(Node):
 
 # TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
 # TODO: opcao pra abrir edit em cima do render-widgets, tipo um overlay (nao abre outra janela, mostra widgets)
-# TODO: mudar nome disso? afinal agora junta widgets+actions+sensors
 # TODO: talvez de pra separar o "UISystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
 #       e finalmente uma com widget+actions+sensores
 # TODO: atalho de teclado pro save
@@ -116,9 +115,9 @@ class UISystem:
     * Contains a Widget hierarchy for configuring the UI. The widgets are fully-configurable by the user.
     * Supports Actions for defining logic that can be executed on events.
     * Supports system level events and widgets events for triggering actions.
-    * Widgets and Actions are defined in a single NodeEditor, allowing easy user configuration by visual node "programming" in a single graph.
+    * Widgets and Actions are defined in a single graph, allowing easy user configuration by visual node "programming".
     * Supports the Sensors System as nodes for providing sensor data and events to the graph.
-    * User configuration is persisted in Nimbus' DataCache (key based on system name).
+    * Graph configuration can be persisted in Nimbus' DataCache (key based on system name).
     """
 
     def __init__(self, name: str, nodes: list[Node] = None):

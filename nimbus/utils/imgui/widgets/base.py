@@ -505,7 +505,7 @@ class ContainerWidget(BaseWidget):
 
     Logically, a ContainerWidget is a collection of Slots. Each slot defines where and how to render a optional child widget.
     The container itself handles adding, removing, updating and rendering slots. Container widgets implementations thus mostly
-    handle defining its slots, and how to update them.
+    handle defining its slots, and how to update them (their areas).
     """
 
     def __init__(self):
