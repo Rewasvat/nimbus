@@ -38,7 +38,7 @@ class TextObject:
     def __init__(self, text=""):
         self.text: str = text
         self.align: TextAlignment = TextAlignment.CENTER
-        self.area = Rectangle()
+        self.area: Rectangle = Rectangle()
         """Position and size of area where to draw this text."""
         self.wrapped: bool = False
         self.scale = 1.0
@@ -314,8 +314,7 @@ class TextMixin:
 
     def _draw_text(self):
         """Internal utility to render our label's text."""
-        self._text_internal.area.position = self._pos
-        self._text_internal.area.size = self._area
+        self._text_internal.area = self.area
         self._text_internal.text = self._format_text(self.text)
         self._text_internal.color = self.text_color
         self._text_internal.scale = self.scale

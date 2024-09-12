@@ -108,7 +108,7 @@ class AxisList(ContainerWidget):
 
         total_slices_size = max(sum(self.slices), 1)
 
-        axis_size = self._area.x if self._is_horizontal else self._area.y
+        axis_size = self.area.size.x if self._is_horizontal else self.area.size.y
         axis_size -= self._margin * (len(current_slots) + 1)
         piece_size = axis_size / total_slices_size
         pos = self._margin
@@ -119,16 +119,16 @@ class AxisList(ContainerWidget):
 
             if self._is_horizontal:
                 slot_pos = Vector2(pos, self._margin)
-                slot_size = Vector2(size, self._area.y - self._margin*2)
+                slot_size = Vector2(size, self.area.size.y - self._margin*2)
             else:
                 slot_pos = Vector2(self._margin, pos)
-                slot_size = Vector2(self._area.x - self._margin*2, size)
+                slot_size = Vector2(self.area.size.x - self._margin*2, size)
             slot_size = slot_size.max((10, 10))
 
             slot.pin_name = f"#{i+1}"
             # NOTE: se somamos self.position, pra esse slot_pos ficar absoluto, caga tudo...
             #   Mas em tese todas slot positions deviam ser absolutas, não?
-            slot.area.position = slot_pos + self.position
+            slot.area.position = slot_pos + self.area.position
             slot.area.size = slot_size
 
             pos += size + self._margin

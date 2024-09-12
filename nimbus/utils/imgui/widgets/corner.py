@@ -91,20 +91,20 @@ class Corner(LeafWidget):
         """
         size = Vector2(self._width_ratio, self._height_ratio)
         if not self._use_absolute_values:
-            size *= self._area
+            size *= self.area.size
         return size
 
     @property
     def top_bar_pos(self) -> Vector2:
         """The position of the top corner-point of the bar that would extend horizontally from this corner. [GET]"""
         if self._type == CornerType.TOP_LEFT:
-            return self.top_right_pos
+            return self.area.top_right_pos
         elif self._type == CornerType.TOP_RIGHT:
-            return self._pos.copy()
+            return self.area.position
         elif self._type == CornerType.BOTTOM_RIGHT:
-            return self.bottom_left_pos - (0, self.size.y)
+            return self.area.bottom_left_pos - (0, self.size.y)
         elif self._type == CornerType.BOTTOM_LEFT:
-            return self.bottom_right_pos - (0, self.size.y)
+            return self.area.bottom_right_pos - (0, self.size.y)
 
     @property
     def bottom_bar_pos(self) -> Vector2:
@@ -115,13 +115,13 @@ class Corner(LeafWidget):
     def left_column_pos(self) -> Vector2:
         """The position of the left corner-point of the column that would extend vertically from this corner. [GET]"""
         if self._type == CornerType.TOP_LEFT:
-            return self.bottom_left_pos
+            return self.area.bottom_left_pos
         elif self._type == CornerType.TOP_RIGHT:
-            return self.bottom_right_pos - (self.size.x, 0)
+            return self.area.bottom_right_pos - (self.size.x, 0)
         elif self._type == CornerType.BOTTOM_RIGHT:
-            return self.top_right_pos - (self.size.x, 0)
+            return self.area.top_right_pos - (self.size.x, 0)
         elif self._type == CornerType.BOTTOM_LEFT:
-            return self._pos.copy()
+            return self.area.position
 
     @property
     def right_column_pos(self) -> Vector2:
@@ -132,13 +132,13 @@ class Corner(LeafWidget):
     def inner_curve_center_pos(self) -> Vector2:
         """Gets the position of the center of the inner curve's circle [GET]"""
         if self._type == CornerType.TOP_LEFT:
-            pos = self.position
+            pos = self.area.position
         elif self._type == CornerType.TOP_RIGHT:
-            pos = self.top_right_pos
+            pos = self.area.top_right_pos
         elif self._type == CornerType.BOTTOM_RIGHT:
-            pos = self.bottom_right_pos
+            pos = self.area.bottom_right_pos
         elif self._type == CornerType.BOTTOM_LEFT:
-            pos = self.bottom_left_pos
+            pos = self.area.bottom_left_pos
         dir = self.corner_direction * -1
         dir.signed_normalize()
         return pos + dir * (self.size + self.inner_curve_radius)
@@ -146,7 +146,7 @@ class Corner(LeafWidget):
     @property
     def inner_curve_radius(self):
         """Gets the radius of the inner curve [GET]"""
-        rest = self._area - self.size
+        rest = self.area.size - self.size
         return min(*rest)
 
     @property
@@ -170,9 +170,9 @@ class Corner(LeafWidget):
     def _draw_corner_path(self):
         """Draws the corner visual elements with imgui."""
         draw = imgui.get_window_draw_list()
-        pos = self._pos.copy()
+        pos = self.area.position
         size = self.size
-        rest = self._area - size
+        rest = self.area.size - size
 
         small = min(*rest)  # radius of inner (small) curve
         big = small + min(*size)  # radius of outer (large) curve
@@ -180,11 +180,11 @@ class Corner(LeafWidget):
         if self._type == CornerType.TOP_LEFT:
             flags = imgui.ImDrawFlags_.round_corners_top_left
             small_start = pos + size
-            small_end = pos + self._area
+            small_end = pos + self.area.size
         elif self._type == CornerType.TOP_RIGHT:
             flags = imgui.ImDrawFlags_.round_corners_top_right
             small_start = pos + (0, size.y)
-            small_end = pos + (rest.x, self._area.y)
+            small_end = pos + (rest.x, self.area.size.y)
         elif self._type == CornerType.BOTTOM_RIGHT:
             flags = imgui.ImDrawFlags_.round_corners_bottom_right
             small_start = pos.copy()
@@ -192,9 +192,9 @@ class Corner(LeafWidget):
         elif self._type == CornerType.BOTTOM_LEFT:
             flags = imgui.ImDrawFlags_.round_corners_bottom_left
             small_start = pos + (size.x, 0)
-            small_end = pos + (self._area.x, rest.y)
+            small_end = pos + (self.area.size.x, rest.y)
 
-        draw.add_rect_filled(pos, pos + self._area, self.color.u32, big, flags)
+        draw.add_rect_filled(pos, pos + self.area.size, self.color.u32, big, flags)
         draw.add_rect_filled(small_start, small_end, Colors.background.u32, small, flags)
 
     @classmethod
@@ -219,7 +219,7 @@ class Corner(LeafWidget):
         """Method automatically called by our ``width_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
-            editor.max = self._area.x
+            editor.max = self.area.size.x
         else:
             editor.max = 1.0
 
@@ -227,6 +227,6 @@ class Corner(LeafWidget):
         """Method automatically called by our ``height_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
-            editor.max = self._area.y
+            editor.max = self.area.size.y
         else:
             editor.max = 1.0

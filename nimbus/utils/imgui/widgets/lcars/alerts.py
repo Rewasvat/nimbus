@@ -65,7 +65,7 @@ class Alert(LeafWidget):
     def _draw_alert(self):
         """Internal utility to render our rectangle."""
         ratio = 1.0 / self._xaml_scale.aspect_ratio()
-        alert_area = self.slot.area.get_inner_rect(ratio, self.out_margin)
+        alert_area = self.area.get_inner_rect(ratio, self.out_margin)
         pos = alert_area.position
         size = alert_area.size
 

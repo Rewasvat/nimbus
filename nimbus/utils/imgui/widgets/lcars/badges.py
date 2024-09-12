@@ -186,7 +186,7 @@ class SFCM(LeafWidget):
     def _draw_badge(self):
         """Draws this badge using imgui."""
         ratio = 1.0 / self._xaml_scale.aspect_ratio()
-        badge_area = self.slot.area.get_inner_rect(ratio, self.out_margin)
+        badge_area = self.area.get_inner_rect(ratio, self.out_margin)
         pos = badge_area.position
         size = badge_area.size
 

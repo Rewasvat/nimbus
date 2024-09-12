@@ -311,7 +311,7 @@ class MainControls(LeafWidget):
     def _draw_main_controls(self):
         """Draws the LCARS main controls widget using imgui"""
         ratio = 1.0 / self._xaml_scale.aspect_ratio()
-        controls_area = self.slot.area.get_inner_rect(ratio)
+        controls_area = self.area.get_inner_rect(ratio)
 
         pos = controls_area.position
         size = controls_area.size

@@ -1,4 +1,5 @@
 import nimbus.utils.imgui.type_editor as types
+from nimbus.utils.imgui.math import Rectangle
 from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
 from nimbus.utils.imgui.colors import Color, Colors
 from nimbus.utils.imgui.nodes import input_property
@@ -71,13 +72,14 @@ class RectMixin:
     def actual_rounding(self):
         """Actual value of corner roundness, used for drawing the rectangle.
         This converts our ``self.rounding`` scaling factor to the actual range of pixel values for the rounding. [GET]"""
-        max_value = min(self._area.x, self._area.y) * 0.5
+        area: Rectangle = self.area
+        max_value = area.size.min_component() * 0.5
         return max_value * self.rounding
 
     def _draw_rect(self):
         """Internal utility to render our rectangle."""
-        draw = imgui.get_window_draw_list()
-        draw.add_rect_filled(self.position, self.bottom_right_pos, self.color.u32, self.actual_rounding, self.corners.get_flags())
+        area: Rectangle = self.area
+        area.draw(self.color, True, rounding=self.actual_rounding, flags=self.corners.get_flags())
 
 
 class Rect(RectMixin, LeafWidget):

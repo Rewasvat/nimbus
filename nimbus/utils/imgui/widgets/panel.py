@@ -174,7 +174,7 @@ class Panel(ContainerWidget):
         """Base real size of borders, from our settings [GET]"""
         size = Vector2(self._border_width_ratio, self._border_height_ratio)
         if not self._use_absolute_values:
-            size *= self._area
+            size *= self.area.size
         return size
 
     @property
@@ -192,9 +192,9 @@ class Panel(ContainerWidget):
         top_left_corner = self.corners[0]  # top left corner
         pos = top_left_corner.inner_curve_center_pos + top_left_corner.corner_direction * top_left_corner.inner_curve_radius * 0.5
         if PanelBorders.TOP not in self._borders_type:
-            pos.y = self.position.y + self._out_margin
+            pos.y = self.area.position.y + self._out_margin
         if PanelBorders.LEFT not in self._borders_type:
-            pos.x = self.position.x + self._out_margin
+            pos.x = self.area.position.x + self._out_margin
         return pos
 
     @property
@@ -203,9 +203,9 @@ class Panel(ContainerWidget):
         bottom_right_corner = self.corners[3]  # bottom right corner
         end_pos = bottom_right_corner.inner_curve_center_pos + bottom_right_corner.corner_direction * bottom_right_corner.inner_curve_radius * 0.5
         if PanelBorders.BOTTOM not in self._borders_type:
-            end_pos.y = bottom_right_corner.bottom_right_pos.y
+            end_pos.y = bottom_right_corner.area.bottom_right_pos.y
         if PanelBorders.RIGHT not in self._borders_type:
-            end_pos.x = bottom_right_corner.bottom_right_pos.x
+            end_pos.x = bottom_right_corner.area.bottom_right_pos.x
         return end_pos - self.child_pos
 
     @property
@@ -226,19 +226,19 @@ class Panel(ContainerWidget):
         """Updates our given child corner."""
         margin_vec = Vector2(self._out_margin, self._out_margin)
         size = self.corner_size
-        pos = self._pos.copy()
+        pos = self.area.position
         if corner.type == CornerType.TOP_RIGHT:
             enabled = PanelBorders.TOP in self._borders_type and PanelBorders.RIGHT in self._borders_type
-            pos += (self._area.x - size.x - margin_vec.x, margin_vec.y)
+            pos += (self.area.size.x - size.x - margin_vec.x, margin_vec.y)
         elif corner.type == CornerType.TOP_LEFT:
             enabled = PanelBorders.TOP in self._borders_type and PanelBorders.LEFT in self._borders_type
             pos += margin_vec
         elif corner.type == CornerType.BOTTOM_RIGHT:
             enabled = PanelBorders.BOTTOM in self._borders_type and PanelBorders.RIGHT in self._borders_type
-            pos = self.bottom_right_pos - size - margin_vec
+            pos = self.area.bottom_right_pos - size - margin_vec
         elif corner.type == CornerType.BOTTOM_LEFT:
             enabled = PanelBorders.BOTTOM in self._borders_type and PanelBorders.LEFT in self._borders_type
-            pos += (margin_vec.x, self._area.y - size.y - margin_vec.y)
+            pos += (margin_vec.x, self.area.size.y - size.y - margin_vec.y)
 
         corner.use_absolute_values = self._use_absolute_values
         corner.width_ratio = self._border_width_ratio
@@ -270,17 +270,17 @@ class Panel(ContainerWidget):
         if side in (PanelBorders.TOP | PanelBorders.BOTTOM):
             p1 = start_corner.top_bar_pos
             if not start_corner.enabled:
-                p1 -= (start_corner.area.x, 0)
+                p1 -= (start_corner.area.size.x, 0)
             p2 = end_corner.bottom_bar_pos
             if not end_corner.enabled:
-                p2 += (end_corner.area.x, 0)
+                p2 += (end_corner.area.size.x, 0)
         else:
             p1 = start_corner.left_column_pos
             if not start_corner.enabled:
-                p1 -= (0, start_corner.area.y)
+                p1 -= (0, start_corner.area.size.y)
             p2 = end_corner.right_column_pos
             if not end_corner.enabled:
-                p2 += (0, end_corner.area.y)
+                p2 += (0, end_corner.area.size.y)
 
         actual_border_size = p2 - p1
         border.area.position = p1
@@ -332,7 +332,7 @@ class Panel(ContainerWidget):
         """Method automatically called by our ``border_width_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
-            editor.max = self._area.x
+            editor.max = self.area.size.x
         else:
             editor.max = 1.0
 
@@ -340,7 +340,7 @@ class Panel(ContainerWidget):
         """Method automatically called by our ``border_height_ratio`` float-property editor in order to dynamically
         update its settings before editing."""
         if self._use_absolute_values:
-            editor.max = self._area.y
+            editor.max = self.area.size.y
         else:
             editor.max = 1.0
 

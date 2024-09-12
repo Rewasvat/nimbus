@@ -97,8 +97,15 @@ class BaseWidget(Node):
         self._name: str = ""
         self.slot: Slot = None
         """Parent slot containing this widget. Might be None."""
-        self._area: Vector2 = Vector2()  # TODO: talvez tirar isso pq puxa do slot
-        self._pos: Vector2 = Vector2()
+        self._area: Rectangle = Rectangle()
+        """Internal area rectangle of this widget, this is the widget's position and size for rendering.
+
+        Prefer to use ``self.area`` instead of this private attribute!
+
+        All widgets keep their own area object instead of using their parent slot's area since there can be valid
+        rendering widgets without a parent slot (like the root widget in a graph). This internal area is updated
+        every frame by our parent slot or by whoever is handling this slot-less widget.
+        """
         self.editable = True
         """If this widget is editable by the user during runtime. Depends on our UISystem having edit enabled."""
         self.interactive = True
@@ -147,29 +154,11 @@ class BaseWidget(Node):
                 return parent_pin.parent_node.system
 
     @property
-    def position(self):
-        """The position (top-left corner) of this widget, in absolute coords. [GET]"""
-        return self._pos.copy()
-
-    @property
     def area(self):
-        """The size of this widget. It's the available area size of our parent slot. [GET]"""
-        return self._area.copy()
+        """The area of this widget [GET].
 
-    @property
-    def top_right_pos(self):
-        """The position of this widget's top-right corner. [GET]"""
-        return self._pos + (self._area.x, 0)
-
-    @property
-    def bottom_left_pos(self):
-        """The position of this widget's bottom-left corner. [GET]"""
-        return self._pos + (0, self._area.y)
-
-    @property
-    def bottom_right_pos(self):
-        """The position of this widget's bottom-right corner. [GET]"""
-        return self._pos + self._area
+        It's the available area of our parent slot - this is our position and size; where we are drawn to. """
+        return self._area
 
     @output_property(use_prop_value=True)
     def this(self):
@@ -305,8 +294,8 @@ class BaseWidget(Node):
             pos = Vector2(*imgui.get_cursor_screen_pos())
         if size is None:
             size = Vector2(*imgui.get_content_region_avail())
-        self._area = size
-        self._pos = pos
+        self._area.position = pos
+        self._area.size = size
 
     def __str__(self):
         return f"{self.id}:{self.name}"

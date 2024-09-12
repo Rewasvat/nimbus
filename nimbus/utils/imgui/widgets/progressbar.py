@@ -379,7 +379,7 @@ class ProgressBar(TextMixin, LeafWidget):
         self._inner_bar.bar_color = self.bar_color
         self._inner_bar.frame_color = self.frame_color
         self._inner_bar.value = self.value
-        self._inner_bar.area = self.slot.area
+        self._inner_bar.area = self.area
         self._inner_bar.draw()
         self._draw_text()
         self._handle_interaction()

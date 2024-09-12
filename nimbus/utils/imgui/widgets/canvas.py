@@ -58,5 +58,5 @@ class Canvas(ContainerWidget):
 
     def update_slots(self):
         for slot in self._slots:
-            slot.area.position = self.position + self.area * slot.pos_ratio
-            slot.area.size = self.area * slot.size_ratio
+            slot.area.position = self.area.position + self.area.size * slot.pos_ratio
+            slot.area.size = self.area.size * slot.size_ratio
