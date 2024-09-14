@@ -170,6 +170,12 @@ class UISystem:
         manager = UIManager()
         manager.update_system(self)
 
+    def clear(self):
+        """Clears this UISystem, deleting all nodes (widgets, actions, sensors, etc) we contain.
+        This does NOT update the system's saved config in UIManager.
+        """
+        self.node_editor.clear()
+
     def render_create_widget_menu(self, accepted_bases: list[type[BaseWidget]] = [BaseWidget]) -> BaseWidget | None:
         """Renders the contents for a menu that allows the user to create a new widget, given the possible options.
 

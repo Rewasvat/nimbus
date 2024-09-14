@@ -446,3 +446,10 @@ class NodeEditor:
         """Changes the editor's viewport position and zoom in order to make all content in the editor
         fit in the window (the editor's area)."""
         imgui_node_editor.navigate_to_content()
+
+    def clear(self):
+        """Clears this editor, deleting all nodes we contain."""
+        for node in self.nodes.copy():
+            node.delete()
+            node.editor = None
+        self.nodes.clear()

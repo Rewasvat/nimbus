@@ -131,12 +131,15 @@ class WidgetsTestApp(windows.AppWindow):
     def render(self):
         if imgui.is_key_pressed(imgui.Key.escape):
             self.close()
+
+        delta_t = imgui.get_io().delta_time
+        sensors.ComputerSystem().timed_update(delta_t)
+
         if self._in_edit_mode:
             self.update_closed_systems()
         else:
-            # TODO: this
+            # TODO: all of this (display mode)
             if self.system is not None:
-                sensors.ComputerSystem().timed_update(self.system._root_node.delta_time)  # TODO: melhorar daonde/como pega esse deltaT
                 self.system.render()
 
     def on_init(self):
@@ -184,7 +187,9 @@ class WidgetsTestApp(windows.AppWindow):
         they are closed as well.
         """
         # Delete instantiated system
-        self.opened_systems.pop(name, None)
+        system = self.opened_systems.pop(name, None)
+        if system is not None:
+            system.clear()
         # Delete system config from manager
         self.system_manager.remove_config(name)
         # Remove system windows, if opened
@@ -272,6 +277,7 @@ class WidgetsTestApp(windows.AppWindow):
             if (not self.has_display_window(name)) and (not self.has_edit_window(name)):
                 if system := self.opened_systems.pop(name, None):
                     system.save_config()
+                    system.clear()
 
 
 class MonitorMainWindow(windows.BasicWindow):
