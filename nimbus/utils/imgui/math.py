@@ -190,6 +190,10 @@ class Vector2(ImVec2):
         """Returns the aspect-ratio of this vector: ``X / Y``"""
         return self.x / self.y
 
+    def is_zero(self):
+        """Checks if this is a ZERO vector - that is, is this is a (0, 0) vector (or both components have a 0 value)."""
+        return self.x == 0 and self.y == 0
+
     @classmethod
     def from_angle(cls, angle: float):
         """Returns a unit-vector based on the given ANGLE (in radians)."""

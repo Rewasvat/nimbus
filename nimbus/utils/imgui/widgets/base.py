@@ -123,7 +123,7 @@ class BaseWidget(Node):
     @property
     def id(self):
         """Fixed ID of this widget. IDs are uniquely generated at creation, according to widget type and overall instance count."""
-        return f"{type(self).__name__}-{self.node_id.id()}"
+        return f"{type(self).__name__}"  # -{self.node_id.id()}
 
     @types.string_property(imgui.InputTextFlags_.enter_returns_true)
     def name(self) -> str:
@@ -297,7 +297,9 @@ class BaseWidget(Node):
         self._area.size = size
 
     def __str__(self):
-        return f"{self.id}:{self.name}"
+        if len(self.name) > 0:
+            return f"{self.id}:{self.name}"
+        return self.id
 
 
 @not_user_creatable
@@ -521,7 +523,7 @@ class ContainerWidget(BaseWidget):
         This is incremented automatically when a new slot is added, but subclasses should update this on their constructors
         when creating/adding new slots in the constructor.
         """
-        self.accepts_new_slots = True
+        self.accepts_new_slots: bool = True
         """If user-interaction (while editing) can add new slots to this container."""
         self._edit_slot_header_color = Color(0.1, 0.5, 0.3, 1)
         self.node_header_color = WidgetColors.Containers
@@ -641,11 +643,26 @@ class ContainerWidget(BaseWidget):
     def setup_from_config(self, data: dict[str]):
         slots_data = data.pop("slots", [])
         # Start by erasing all existing slots - these should be default slots created along with the widget
+        old_slots = self._slots.copy()
         self._slots.clear()
+        self.slot_counter = 0
         # Recreate slots from stored config
-        for info in slots_data:
+        for i, info in enumerate(slots_data):
+            # get info
+            old_slot = None
+            if i < len(old_slots):
+                old_slot = old_slots[i]
             slot_name = info["slot_name"]
-            slot = info["slot_class"](self, slot_name)
+            slot_class = info["slot_class"]
+            # Recreate slot object
+            if old_slot is not None and type(old_slot) is slot_class and old_slot.pin_name == slot_name:
+                # A slot object of the same class and name as expected already exists in the same index.
+                # Use it instead of creating a new object.
+                # This can prevent issues with containers that have fixed slots, like Panel.
+                slot = old_slot
+            else:
+                slot = slot_class(self, slot_name)
+            # Update properties and slot list
             self.slot_counter += 1
             node_config.restore_prop_values_to_object(slot, info["prop_values"])
             self._slots.append(slot)

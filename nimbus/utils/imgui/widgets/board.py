@@ -72,7 +72,7 @@ class Board(ContainerWidget):
             self._selected_name = self.boards[0] if len(self.boards) > 0 else ""
         self.selected_name = self._selected_name  # to update enabled slots.
 
-    def _update_selected_name_editor(self, editor: types.EnumEditor):
+    def _update_selected_name_editor(self, editor: types.StringEditor):
         """Method automatically called by our ``selected_name`` enum-property editor in order to dynamically
         update its settings before editing."""
         editor.options = self.boards

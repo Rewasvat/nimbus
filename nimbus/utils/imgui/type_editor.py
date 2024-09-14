@@ -476,7 +476,7 @@ class StringEditor(TypeEditor):
         # String Enums attributes
         self.options: list[str] = config.get("options")
         self.docs: list[str] | dict[str, str] | None = config.get("docs")
-        self.option_flags: imgui.SelectableFlags_ = config.get("flags", 0)
+        self.option_flags: imgui.SelectableFlags_ = config.get("option_flags", 0)
         self.add_tooltip_after_value = self.options is None
         self.multiline: bool = config.get("multiline", False)
         self.color = Colors.magenta

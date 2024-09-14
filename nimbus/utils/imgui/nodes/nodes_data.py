@@ -421,8 +421,8 @@ class DataPropertyState(DataPinState):
         return super().get()
 
     def set(self, value):
-        self.property.set_prop_value(self.parent_node, value)
         super().set(value)
+        self.property.set_prop_value(self.parent_node, value)
 
     def type(self):
         return self.property.get_value_type(self.parent_node)
