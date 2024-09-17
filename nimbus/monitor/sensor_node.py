@@ -303,7 +303,7 @@ class Sensor(Node):
             Always 0 if we have no limits (``self.limits`` is None) or if the difference between the maximum and minimum limits is 0.
         """
         range = self.limits_diff
-        if range == 0.0:
+        if range == 0.0 or (value is None):
             return 0.0
         factor = (value - self.min_limit) / range
         return min(1.0, max(0.0, factor))
