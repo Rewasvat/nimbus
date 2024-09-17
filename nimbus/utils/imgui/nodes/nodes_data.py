@@ -94,7 +94,7 @@ class DataPinState:
         else:
             self.editor = types.TypeDatabase().get_editor(self.type(), config)
 
-    def delete(self):
+    def on_delete(self):
         """Deletes this pin state. Called when the parent pin is deleted."""
         pass
 
@@ -233,7 +233,7 @@ class DataPin(NodePin):
 
         DataPin implementation: deletes the state, removes ourselves from parent node and runs default implementation.
         """
-        self.state.delete()
+        self.state.on_delete()
         self.parent_node.remove_pin(self)
         super().delete()
 
@@ -507,11 +507,24 @@ class DynamicInputState(DataPropertyState):
         #   returns the internal type, so our editor would try to fix the value-type to the wrong type and crash.
         return self.get()
 
-    def set(self, value):
-        # TODO: setar lista direto:
-        #   - pra pins/substates que já existe, seta valor deles pra cada item
-        #   - se faltar substates, cria eles (e seus pins)
-        #   - se tá sobrando substate, deleta eles (e seus pins)
+    def set(self, value: list):
+        sub_pins = self.parent_pin._sub_pins
+        diff = len(value) - len(sub_pins)
+        while diff > 0:
+            # New value has more itens than current, add new pins to match.
+            self.parent_pin.create_sub_pin()
+            diff -= 1
+        while diff < 0:
+            # New value has less itens than current, remove excess pins to match.
+            last_subpin = sub_pins[-1].parent_pin
+            last_subpin.delete()
+            diff += 1
+
+        # Update values of subpins with new values
+        for i, substate in enumerate(sub_pins):
+            new_value = value[i]
+            substate.parent_pin.set_value(new_value)
+
         super().set(value)
 
     def type(self):
@@ -538,11 +551,11 @@ class DynamicInputSubPinState(DataPinState):
     def type(self) -> type:
         return self.owner.subtypes()[0]
 
-    def delete(self):
+    def on_delete(self):
         self.owner.parent_pin._sub_pins.remove(self)
         for substate in self.owner.parent_pin._sub_pins:
             substate.update_name()
-        return super().delete()
+        return super().on_delete()
 
     def update_name(self):
         """Updates the name of this state (and its pin) according to our current index."""
