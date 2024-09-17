@@ -1,17 +1,22 @@
-import re
 import math
 import click
 import itertools
 import nimbus.utils.command_utils as cmd_utils
+import nimbus.utils.imgui.type_editor as types
 from enum import Enum
 from dataclasses import dataclass
-from typing import Iterator
+from typing import Iterator, TYPE_CHECKING
+from imgui_bundle import imgui
 from nimbus.data import DataCache
 from nimbus.monitor.native_api import SensorType, ISensor, Computer
 from nimbus.monitor.test_sensor import TestIHardware, TestIComputer
-from nimbus.utils.imgui.math import Vector2, multiple_lerp_with_weigths
-from nimbus.utils.imgui.colors import Colors, Color
-from nimbus.utils.imgui.nodes import PinKind, Node, input_property, output_property
+from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.colors import Color, Colors
+from nimbus.utils.imgui.general import drop_down
+
+
+if TYPE_CHECKING:
+    from nimbus.monitor.sensor_node import Sensor
 
 
 # Local implementation of classes wrapping C# types.
@@ -210,7 +215,7 @@ class Hardware:
     @property
     def sensors(self):
         """Gets a list of all existing Sensor objects that use a InternalSensor from this hardware."""
-        return [isen.sensor for isen in self._isensors if isen.sensor is not None]
+        return sum((isen.sensors for isen in self._isensors), [])
 
     @property
     def isensors(self):
@@ -331,11 +336,11 @@ class InternalSensor:
 
     This is a simple wrapper of ``LibreHardwareMonitorLib.Hardware.ISensor`` interface, providing some basic identification values.
 
-    A ComputerSystem will always have all of its InternalSensors objects upod loading. Since we contain native C# objects, this class
+    A ComputerSystem will always create all of its InternalSensors objects upon loading. Since we contain native C# objects, this class
     can't be pickled.
 
-    A InternalSensor may contain a ref to a single ``Sensor`` object that uses that InternalObject internally for accessing the C# sensor.
-    The ``Sensor`` class for the proper API to use sensor data.
+    A InternalSensor contains refs to all ``Sensor`` objects that use it. The ``Sensor`` class is the proper API to access/use sensor
+    data, and it uses its InternalSensor object internally to access the underlying data.
     """
 
     def __init__(self, internal_sensor: ISensor, parent_hw: Hardware):
@@ -346,12 +351,12 @@ class InternalSensor:
         """Parent hardware of this sensor."""
         self.unit: SensorUnit = SensorUnit.from_type(self.type)
         """Unit of this sensor, based on its type (usually SI units)."""
-        self._sensor: Sensor = None
+        self._sensors: list[Sensor] = []
 
     @property
-    def id(self) -> str:
+    def id(self) -> 'SensorID':
         """Gets the sensor ID. This uniquely identifies this sensor (and is reasonably human-readable)."""
-        return str(self.isensor.Identifier)
+        return SensorID(self.isensor.Identifier)
 
     @property
     def name(self) -> str:
@@ -385,423 +390,98 @@ class InternalSensor:
             return Vector2(low, high)
 
     @property
-    def sensor(self):
-        """Gets the Sensor object associated with this InternalSensor/ID.
+    def info(self):
+        """Gets a short multi-line description of this sensor (name, type, unit, parent hardware, etc)"""
+        lines = [
+            f"Sensor: {self.name} ({self.id})",
+            f"Type/unit: {self.type} ({self.unit})",
+            f"Hardware: {self.parent.full_name} ({self.parent.type})",
+        ]
+        return "\n".join(lines)
 
-        The Sensor object is the proper API for accessing/changing sensor data, while this InternalSensor is only a bare
+    @property
+    def sensors(self):
+        """Gets the Sensor nodes associated with this InternalSensor/ID.
+
+        A Sensor node is the proper API for accessing/changing sensor data, while this InternalSensor is only a bare
         ISensor wrapper providing minimal identification values.
 
-        This might be None if no Sensor object is associated. See ``self.create()`` to create and associate a Sensor
-        to this InternalSensor.
+        See ``self.create()`` to create and associate a Sensor to this InternalSensor.
         """
-        return self._sensor
+        return self._sensors
 
     def create(self):
         """Creates a Sensor object associated with this InternalSensor/ID.
 
         Returns:
-            Sensor: newly created Sensor object, or None if a associated sensor already existed.
-            See ``self.sensor`` for getting the associated sensor afterwards.
+            Sensor: newly created Sensor object.
         """
-        if self._sensor:
-            return
-        self._sensor = Sensor(self.id)
-        return self._sensor
+        from nimbus.monitor.sensor_node import Sensor
+        sensor = Sensor(self.id)
+        self._add(sensor)
+        return sensor
 
-    def clear(self):
+    def _add(self, sensor: 'Sensor'):
+        """Adds the given Sensor object to our list of sensors, if we haven't already.
+        This is used internally when ``self.create()``ing a new sensor object.
+        """
+        if sensor not in self._sensors:
+            self._sensors.append(sensor)
+
+    def _remove(self, sensor: 'Sensor'):
         """Clears our associated Sensor object, if any.
-
-        This will reset the ID of the Sensor object, and remove it from this InternalSensor.
+        This is used internally by the Sensor when it is destroyed.
         """
-        if self._sensor:
-            self._sensor._isensor = None
-            self._sensor = None
+        if sensor in self._sensors:
+            self._sensors.remove(sensor)
 
 
-class Sensor(Node):
-    """Represents a single Sensor for a hardware device.
+class SensorID(str):
+    """Represents the unique identification value of a InternalSensor.
 
-    A Sensor measures a single numeric value of some kind about the hardware, such as: temperature, power usage, fan speed,
-    usage (%), and so on.
-    The hardware itself and its drivers provide these values. LibreHardwareMonitorLib uses native APIs to query these values,
-    and we can see and use here those that the lib (and your hardware) supports.
+    This is just a `string`. But by using this sub-class, we can better document (by typing) the
+    places that should/are using a Sensor ID, and we can easily allow a custom editing of this
+    value in IMGUI with our TypeEditors to only allow selecting valid sensor IDs as value.
 
-    Wraps and builds upon ``LibreHardwareMonitorLib.Hardware.ISensor`` interface.
-
-    This class uses an InternalSensor for accessing the C# ISensor interface for the sensor with its given ID.
-    As such, while technically more than one SensorInstance could exist for the same sensor-id, the InternalSensor object
-    for said id restricts for a single object at any given time. Creating a new Sensor would reset the ID of the previous sensor
-    for that sensor-id.
-
-    However, this class is pickable as a Node should be, and thus can be easily saved to maintain internal sensor user settings.
+    The editing part is particularly useful when the sensors are used as nodes in a UISystem graph.
     """
 
-    def __init__(self, id: str = None):
-        super().__init__()
-        # FIXED SENSOR-RELATED ATTRIBUTES
-        self._isensor: InternalSensor = None
-        self._set_id(id)
-        # USER-UPDATABLE SENSOR-RELATED ATTRIBUTES
-        self.limits_type: SensorLimitsType = SensorLimitsType.AUTO  # TODO: deixar setar via input-pin somehow
-        """How to define the sensor's min/max limits."""
-        self.custom_limits: Vector2 = None  # TODO: deixar setar via input-pin somehow
-        """Custom sensor limits range. Used when ``self.limits_type`` is ``FIXED``. If None, a default limit range, based
-        on the sensor's unit will be used."""
-        self._enabled: bool = None
-        self._minmax_ever: Vector2 = Vector2(math.inf, -math.inf)
-        # NODE-RELATED ATTRIBUTES
-        self.node_header_color = Color(0.3, 0, 0, 0.6)
-        self.node_bg_color = Color(0.2, 0.12, 0.12, 0.75)
-        self.node_title = f"{self.hardware.full_name}\n{self.name} {self.type}"
-        from nimbus.utils.imgui.actions import ActionFlow
-        self._on_update_pin = ActionFlow(self, PinKind.output, "On Update")
-        self._on_update_pin.pin_tooltip = "Triggered when this Sensor is updated, getting a new value from the hardware."
-        self.add_pin(self._on_update_pin)
-        self.create_data_pins_from_properties()
 
-    @property  # TODO: deixar setar via input-pin?
-    def enabled(self) -> bool:
-        """If this sensor is enabled. [GET/SET]
+@types.TypeDatabase.register_editor_for_type(SensorID)
+class InternalSensorEditor(types.TypeEditor):
+    """Imgui TypeEditor for selecting a SensorID value."""
 
-        When enabled, we can be shown in any GUI, and our parent hardware will be updated in order to update this sensor
-        when the SensorSystem is updated.
-
-        This property has an internal flag which might be None (the default).
-        * When setting, the value is set to the internal flag and thus might be boolean or None.
-        * When getting, if the internal flag is not None, its value is returned.
-        * When getting, if the internal flag is None, True will be returned if we're currently active as a node in a Node Editor system.
-        Otherwise, returns False.
-        """
-        if self._enabled is None:
-            return self.editor is not None
-        return self._enabled
-
-    @enabled.setter
-    def enabled(self, value: bool | None):
-        self._enabled = value
-
-    @output_property(use_prop_value=True)
-    def id(self) -> str:
-        """Gets the sensor ID. This uniquely identifies this sensor (and is reasonably human-readable)."""
-        return self._isensor and self._isensor.id
-
-    @output_property(use_prop_value=True)
-    def name(self) -> str:
-        """Gets the sensor name. Some different sensors may have the same name."""
-        return self._isensor and self._isensor.name
-
-    @output_property(use_prop_value=True)
-    def hardware(self) -> Hardware:
-        """Gets the parent hardware of this sensor."""
-        return self._isensor and self._isensor.parent
-
-    @output_property(use_prop_value=True)
-    def percent_value(self) -> float:
-        """Gets the sensor value as a percent (in [0,1]) between the sensor's min/max limits.
-        Return is clamped to [0,1] range.
-
-        Always 0 if we have no limits (``self.limits`` is None) or if the difference between the maximum and minimum limits is 0."""
-        return self.get_percent_of_value(self.value)
-
-    @output_property(use_prop_value=True)
-    def value(self) -> float:
-        """The current value of this sensor."""
-        return self._isensor and self._isensor.isensor.Value
-
-    @output_property(use_prop_value=True)
-    def formatted_value(self) -> str:
-        """Gets the sensor's value, but formatted to the common value-format for this sensor's type."""
-        try:
-            if self.value is not None:
-                return self.unit.value_format.format(self.value)
-            return "None"
-        except Exception:
-            click.secho(f"FVALUE CRASH: value='{self.value}' realType='{type(self.value)}' format='{self.unit.value_format}'", fg="red")
-            raise
-
-    @output_property(use_prop_value=True)
-    def minimum(self) -> float:
-        """The minimum value this sensor has reached since measurements started."""
-        return self._isensor and self._isensor.isensor.Min or math.inf
-
-    @output_property(use_prop_value=True)
-    def maximum(self) -> float:
-        """The maximum value this sensor has reached since measurements started."""
-        return self._isensor and self._isensor.isensor.Max or -math.inf
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._options: list[SensorID] = []
+        self._docs: list[str] = []
+        self.add_tooltip_after_value = False
+        self.color = Colors.yellow
+        self.extra_accepted_input_types = str
+        self.convert_value_to_type = True
 
     @property
-    def value_range(self):
-        """Gets the minimum/maximum sensor values as a (min, max) vector2.
-
-        These are the min/max values recorded by the sensor since the start of this our measurement."""
-        return Vector2(self.minimum, self.maximum)
-
-    @output_property(use_prop_value=True)
-    def type(self) -> str:
-        """Gets the type of this sensor. This specifies which kind of data it measures/returns, such
-        as Temperature, Power, Frequency, Load, etc"""
-        # TODO: trocar isso pra uma enum? ou usar a própria enum do C#? Como funcionaria?
-        return self._isensor and self._isensor.type
-
-    @output_property(use_prop_value=True)
-    def unit(self) -> SensorUnit:
-        """The sensor's unit (usually SI units)."""
-        return self._isensor and self._isensor.unit
-
-    @output_property(use_prop_value=True)
-    def min_limit(self) -> float:
-        """Gets the sensor's minimum limit.
-
-        This is the "theoretical" minimum value of this sensor. If the sensor's value is lower than this, most likely
-        the sensor is broken or something is (or will be) really wrong in your computer.
-
-        The limit depends on the Limits Type of this sensor. See ``self.limits_type``.
-
-        For example, percent values shouldn't pass the limit of 0."""
-        return self.limits.x
-
-    @output_property(use_prop_value=True)
-    def max_limit(self) -> float:
-        """Gets the sensor's maximum limit.
-
-        This is the "theoretical" maximum value of this sensor. If the sensor's value is larger than this, most likely
-        the sensor is broken or something is (or will be) really wrong in your computer.
-
-        The limit depends on the Limits Type of this sensor. See `self.limits_type`.
-
-        For example, percent values shouldn't pass the limit of 100. Temperatures shouldn't pass the device's set limits
-        in order to prevent thermal throttling."""
-        return self.limits.y
+    def sensor_options(self):
+        """Gets the sensor options available for selection."""
+        if len(self._options) == 0:
+            self._populate_options()
+        return self._options
 
     @property
-    def limits(self):
-        """Gets the sensor limits as a (min, max) limit vector2.
+    def sensor_docs(self):
+        """Gets the docstrings for the sensor options."""
+        if len(self._docs) == 0:
+            self._populate_options()
+        return self._docs
 
-        These are the "theoretical" limits of this sensor. If the sensor's value is outside this range, most likely
-        the sensor is broken or something is (or will be) really wrong in your computer.
+    def draw_value_editor(self, value: SensorID):
+        flags = imgui.SelectableFlags_.dont_close_popups
+        return drop_down(value, self.sensor_options, self.sensor_docs, default_doc=self.attr_doc, item_flags=flags)
 
-        The limit depends on the Limits Type of this sensor. See ``self.limits_type``.
-
-        For example, percent values shouldn't pass the limit of 100. Temperatures shouldn't pass the device's set limits
-        in order to prevent thermal throttling.
-
-        When setting the value of this property, this changes the sensor's user custom limits, which is only used
-        when using FIXED limits.
-        """
-        if self.limits_type == SensorLimitsType.CRITICAL:
-            return self._get_critical_limits()
-        elif self.limits_type == SensorLimitsType.LIMITS:
-            return self._get_basic_limits()
-        elif self.limits_type == SensorLimitsType.MINMAX:
-            return self.value_range
-        elif self.limits_type == SensorLimitsType.MINMAX_EVER:
-            return self.minmax_ever
-        elif self.limits_type == SensorLimitsType.FIXED:
-            return self._get_custom_limits()
-        # else is only AUTO
-        return self._get_critical_limits() or self._get_basic_limits() or self._get_custom_limits()
-
-    @limits.setter
-    def limits(self, value: Vector2):
-        self.custom_limits = value
-
-    @property
-    def limits_diff(self):
-        """Gets the difference between our minimum and maximum limits.
-        Returns 0 if ``self.limits`` is None."""
-        if self.limits is None:
-            return 0.0
-        return self.max_limit - self.min_limit
-
-    @output_property(use_prop_value=True)
-    def state_color(self) -> Color:
-        """Gets the imgui color of this sensor, based on its current value and limits.
-
-        This uses a few color ranges according to our unit, to interpolate from using ``self.percent_value``
-        and generate the final color. Not all units supports this, in which case color defaults to white.
-        """
-        return self.get_color_for_value(self.value)
-
-    @output_property(use_prop_value=True)
-    def minmax_ever(self) -> Vector2:
-        """Gets the minimum/maximum sensor values ever recorded as a (min, max) vector2.
-
-        These are the min/max values ever recorded by the sensor, across all times this app was executed.
-        Previous min/max values are stored along with user sensor settings to check later."""
-        return Vector2(min(self.minimum, self._minmax_ever.x), max(self.maximum, self._minmax_ever.y))
-
-    def get_attribute(self, key: str):
-        """Gets the property of this sensor whose name matches the given key"""
-        conversions = {
-            "min": "minimum",
-            "max": "maximum",
-            "identifier": "id",
-            "fvalue": "formatted_value"
-        }
-        key = key.lower()
-        key = conversions.get(key, key)
-        if hasattr(self, key):
-            return getattr(self, key)
-
-    # TODO: virar action
-    def format(self, format: str):
-        """Utility to generate a string of formatted data from this sensor.
-
-        Args:
-            format (str): Format of string to generate. ``{key}`` tags in the string are substituted for
-            the value of the sensor property ``key``. Any property from this Sensor class can be used.
-            The tag can include python format specifiers. For example, to get the sensor's value with 3
-            decimal plates: ``{value:.3f}``.
-
-        Returns:
-            str: the generated formatted string.
-        """
-        def replace(m: re.Match):
-            pack: str = m.group(1)
-            parts = pack.split(":")
-            var_name = parts[0]
-            if len(parts) <= 1:
-                entry_format = "{}"
-            else:
-                entry_format = f"{{:{parts[1]}}}"
-            return entry_format.format(self.get_attribute(var_name))
-
-        return re.sub(r"{([^}]+)}", replace, format)
-
-    def _get_critical_limits(self):
-        """Internal method to try to get the sensor's limits from the ICriticalSensorLimits interface."""
-        return self._isensor and self._isensor.critical_limits
-
-    def _get_basic_limits(self):
-        """Internal method to try to get the sensor's limits from the ISensorLimits interface."""
-        return self._isensor and self._isensor.basic_limits
-
-    def _get_custom_limits(self):
-        """Internal method to get the sensor's custom (FIXED) limits."""
-        return self.custom_limits or (self.unit and self.unit.limits or Vector2())
-
-    def get_settings(self):
-        """Gets the settings from this sensor that can be changed by the user. This can then by stored/persisted,
-        sent via network or whatever. A (possibly another) Sensor object can then be updated with ``load_settings()`` to
-        set these values back to the sensor.
-
-        Returns:
-            dict[str,any]: _description_
-        """
-        def convert_vec(v: Vector2):
-            if isinstance(v, tuple):
-                return (v[0], v[1])
-            return (v.x, v.y) if v is not None else None
-        return {
-            "enabled": self.enabled,
-            "custom_limits": convert_vec(self.custom_limits),
-            "limits_type": self.limits_type,
-            "_minmax_ever": convert_vec(self._minmax_ever),
-        }
-
-    def load_settings(self, data: dict[str, any]):
-        """Loads user-persisted settings into this sensor instance.
-
-        Args:
-            data (dict[str, any]): settings values to apply to this sensor. Should have been previously acquired with ``sensor.get_settings()``.
-        """
-        for key, value in data.items():
-            if hasattr(self, key):
-                vec2_keys = {"custom_limits", "_minmax_ever"}
-                if key in vec2_keys and value is not None:
-                    value = Vector2(*value)
-                setattr(self, key, value)
-
-    # TODO: virar action
-    def get_percent_of_value(self, value: float):
-        """Gets the percent of the given value between the sensor's min/max limits.
-
-        Args:
-            value (float): any float value to calculate percent. Preferably, a past or expected
-            value of the sensor.
-
-        Returns:
-            float: the percent value, in the range [0,1]  (clamped).
-            Always 0 if we have no limits (``self.limits`` is None) or if the difference between the maximum and minimum limits is 0.
-        """
-        range = self.limits_diff
-        if range == 0.0:
-            return 0.0
-        factor = (value - self.min_limit) / range
-        return min(1.0, max(0.0, factor))
-
-    # TODO: virar action
-    def get_color_for_value(self, value: float) -> Color:
-        """Gets the imgui color of this sensor, based on the given value and limits.
-
-        This uses a few color ranges according to our unit, to interpolate from using ``self.get_percent_of_value(value)``
-        and generate the final color. Not all units supports this, in which case color defaults to white.
-
-        Args:
-            value (float): any float value to calculate percent. Preferably, a past or expected
-            value of the sensor.
-
-        Returns:
-            ImVec4: sensor color based on the value.
-        """
-        targets = None
-        if self.unit in (SensorUnit.PERCENT, SensorUnit.FAN):
-            targets = [
-                (Colors.magenta, 0),
-                (Colors.green, 0.0001),
-                (Colors.yellow, 0.75),
-                (Colors.red, 1),
-            ]
-        elif self.unit in (SensorUnit.TEMPERATURE, ):
-            targets = [
-                (Colors.red, 0),
-                (Colors.green, 0.001),
-                (Colors.yellow, 0.75),
-                (Colors.red, 1),
-            ]
-        elif self.unit in (SensorUnit.POWER, SensorUnit.VOLTAGE, SensorUnit.CURRENT):
-            targets = [
-                (Colors.green, 0),
-                (Colors.yellow, 0.75),
-                (Colors.red, 1),
-            ]
-        elif self.unit in (SensorUnit.THROUGHPUT, SensorUnit.CLOCK):
-            targets = [
-                (Colors.white, 0),
-                (Colors.white, 0.5),
-                (Colors.yellow, 0.75),
-                (Colors.red, 1),
-            ]
-
-        if targets is not None:
-            return multiple_lerp_with_weigths(targets, self.get_percent_of_value(value))
-        return Colors.white
-
-    def update(self):
-        """Updates this Sensor object.
-
-        Called by our parent Hardware when he is updated.
-        Does nothing if this sensor is not enabled.
-        """
-        if not self.enabled:
-            return
-        # TODO: pegar valores dos inputs? (pra atualizar node)
-        self._on_update_pin.trigger()
-
-    def delete(self):
-        super().delete()
-        if self._isensor:
-            self._isensor.clear()
-
-    def _set_id(self, id: str):
-        """Internal method to reset the ID of this sensor. This changes our InternalSensor object, and therefore may change
-        our id, name, type, value and other properties.
-
-        NOTE: this is used internally by Sensor when it is (re)created. Dont call this outside!
-
-        Args:
-            id (str): sensor ID to set.
-        """
-        self._isensor = ComputerSystem().get_isensor_by_id(id)
-        if self._isensor:
-            self._isensor._sensor = self
+    def _populate_options(self):
+        """Populates the available sensor IDs and infos (used as doc) data stored by this object.
+        This data is then used when rendering the editor to properly display the available options and their docs."""
+        isensors = ComputerSystem().get_all_isensors()
+        for isen in isensors:
+            self._options.append(isen.id)
+            self._docs.append(isen.info)

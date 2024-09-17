@@ -6,7 +6,8 @@ from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKin
 from nimbus.utils.imgui.nodes.node_config import SystemConfig
 from nimbus.utils.imgui.colors import Colors, Color
 from nimbus.utils.imgui.widgets.base import BaseWidget, Slot, WidgetParentPin, draw_widget_pin_icon
-from nimbus.monitor.sensors import Sensor, Hardware, ComputerSystem
+from nimbus.monitor.sensors import Hardware, ComputerSystem
+from nimbus.monitor.sensor_node import Sensor
 from nimbus.data import DataCache
 
 
@@ -223,16 +224,15 @@ class UISystem:
                     if sub_ret:
                         ret = sub_ret
                 for isensor in hw.isensors:
-                    if not isensor.sensor:
-                        if menu_item(f"{isensor.name} ({isensor.type}: {isensor.unit})"):
-                            ret = isensor.create()
-                        imgui.set_item_tooltip(f"ID: {isensor.id}\n\n{Sensor.__doc__}")
+                    if menu_item(f"{isensor.name} ({isensor.type}: {isensor.unit})"):
+                        ret = isensor.create()
+                    imgui.set_item_tooltip(f"{isensor.info}\n\n{Sensor.__doc__}")
                 imgui.end_menu()
             return ret
 
         new_sensor = None
         opened = imgui.begin_menu("Sensors:")
-        imgui.set_item_tooltip("Select a sensor to create as node.\n\nOnly one node of a specific sensor may exist at any given time.")
+        imgui.set_item_tooltip("Select a sensor to create.\n\nA 'empty' sensor or one already set can be created directly.")
         if opened:
             for hardware in ComputerSystem():
                 ret = render_hw(hardware)
