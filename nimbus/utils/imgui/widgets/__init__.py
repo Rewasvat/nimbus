@@ -5,6 +5,7 @@
 # Basic Widget types
 from nimbus.utils.imgui.widgets.system import UISystem, UIManager
 from nimbus.utils.imgui.widgets.base import BaseWidget, LeafWidget, ContainerWidget
+from nimbus.utils.imgui.widgets.system_node import UseSystem
 
 # Container Widget Types
 from nimbus.utils.imgui.widgets.board import Board
