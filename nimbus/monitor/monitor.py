@@ -359,12 +359,12 @@ class MonitorMainWindow(windows.BasicWindow):
             imgui.end_table()
 
 
+# TODO: desabilitar scroll-bars na janela imgui
 class MonitorDisplaySystemWindow(windows.BasicWindow):
     """Sub-window used by `MonitorApp` to render a UISystem."""
 
     def __init__(self, system_name: str, parent: WidgetsTestApp):
         super().__init__(f"Display: {system_name}")
-        # self.remember_is_visible = False
         self.user_closable = True
         self.parent = parent
         self.system_name = system_name
@@ -387,7 +387,6 @@ class MonitorEditSystemWindow(windows.BasicWindow):
 
     def __init__(self, system_name: str, parent: WidgetsTestApp):
         super().__init__(f"Edit: {system_name}")
-        # self.remember_is_visible = False
         self.user_closable = True
         self.parent = parent
         self.system_name = system_name

@@ -294,6 +294,9 @@ class UIManager(metaclass=cmd_utils.Singleton):
 
     def get_config(self, name: str):
         """Gets the stored SystemConfig with the given NAME. May return None if no config exists for the NAME."""
+        # TODO: podemos ter problemas de lugares pegarem esse config retornado daqui, e alterarem ele sem querer, e ai quebrar o save.
+        #     (já aconteceu por sinal, o ContainerWidget.setup_from_config alterava o config com um dict.pop)
+        #   Então talvez seja melhor retornar uma deep-copy (talvez copy.deepcopy resolva), e talvez coisa similar no get_all_configs()
         return self._configs.get(name)
 
     def has_config(self, name: str):

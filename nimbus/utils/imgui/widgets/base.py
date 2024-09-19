@@ -641,7 +641,7 @@ class ContainerWidget(BaseWidget):
         return iter(self.get_children())
 
     def setup_from_config(self, data: dict[str]):
-        slots_data = data.pop("slots", [])
+        slots_data = data.get("slots", [])
         # Start by erasing all existing slots - these should be default slots created along with the widget
         old_slots = self._slots.copy()
         self._slots.clear()
