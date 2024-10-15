@@ -5,6 +5,7 @@ import nimbus.utils.command_utils as cmd_utils
 import nimbus.utils.utils as utils
 import nimbus.utils.imgui.windows as windows
 import nimbus.utils.imgui.general as imgui_utils
+from nimbus.utils.imgui.popups import button_with_confirmation, TextInputPopup
 from nimbus.utils.imgui.colors import Colors
 from nimbus.data import DataCache
 from imgui_bundle import imgui
@@ -127,6 +128,7 @@ class WidgetsTestApp(windows.AppWindow):
         self.show_menu_bar = self._in_edit_mode
         self.show_status_bar = self._in_edit_mode
         self.enable_viewports = self._in_edit_mode
+        self.debug_menu_enabled = True
 
     def render(self):
         if imgui.is_key_pressed(imgui.Key.escape):
@@ -290,19 +292,19 @@ class MonitorMainWindow(windows.BasicWindow):
         super().__init__("Monitor Main")
         self.parent = parent
         self.system_manager = parent.system_manager
-        self._new_system_name = ""
         self.can_be_closed = False
+        self.new_system_popup = TextInputPopup(
+            "Create New System",
+            "New UI System Popup",
+            "Choose the name for this new UI System.",
+            validator=self.validate_new_system_name
+        )
 
     def render(self):
-        # TODO: refatorar esse esquema de criar sistemas pra ser um popup pra selecionar nome, mostrar se é valido ou não, e criar ou desistir.
-        #   - fazer um comando genérico que permita fazer esses popups de input de str seria util (como tem na Tapps)
-        imgui.text("New System Name:")
-        imgui.same_line()
-        self._new_system_name = imgui.input_text("##", self._new_system_name)[1]
-        imgui.same_line()
-        if imgui.button("Create New System"):
-            if self.parent.create_new_system(self._new_system_name):
-                self._new_system_name = ""
+        new_system_name = self.new_system_popup.render()
+        if new_system_name is not None:
+            self.parent.create_new_system(new_system_name)
+            self.new_system_popup.value = ""
 
         imgui.separator()
         imgui.text("UI Systems:")
@@ -350,13 +352,29 @@ class MonitorMainWindow(windows.BasicWindow):
                     imgui.text("-")
 
                 imgui.table_next_column()
-                if imgui.button("Delete"):
-                    # TODO: confirmation-popup pra isso
+                title = f"Confirm {config.name} System Delete"
+                if button_with_confirmation("Delete", title, "Are you sure you want to delete this UISystem config?"):
                     self.parent.delete_system(config.name)
 
                 imgui.pop_id()
 
             imgui.end_table()
+
+    def validate_new_system_name(self, value: str) -> tuple[bool, str]:
+        """Checks if the given value is valid for a new system name.
+
+        Args:
+            value (str): possible new UISystem name to check
+
+        Returns:
+            tuple[bool, str]: a (valid, reason) tuple, which indicates if the given name is valid
+            and the reason why it's invalid.
+        """
+        if value is None or len(value) <= 0:
+            return False, "empty name."
+        if self.parent.system_manager.has_config(value):
+            return False, f"A System with name '{value}' already exists."
+        return True, "valid"
 
 
 # TODO: desabilitar scroll-bars na janela imgui
