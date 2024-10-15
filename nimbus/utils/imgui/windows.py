@@ -4,6 +4,7 @@ import click
 from enum import Enum
 from nimbus.data import DataCache
 from nimbus.utils.imgui.math import Vector2
+from nimbus.utils.imgui.general import menu_item
 from imgui_bundle import imgui, immapp
 from imgui_bundle import hello_imgui, imgui_node_editor  # type: ignore
 
@@ -203,6 +204,9 @@ class AppWindow(BasicWindow):
         Since windows that can be closed by the user are simply set as not visible when closed, this essentially removes windows
         that have been closed by the user.
         """
+        self.debug_menu_enabled = True
+        self._imgui_metrics_window_visible = False
+        self._imgui_log_window_visible = False
 
     def run(self):
         """Runs this window as a new IMGUI App.
@@ -437,3 +441,17 @@ class AppWindow(BasicWindow):
         """
         run_params = hello_imgui.get_runner_params()
         run_params.app_shall_exit = True
+
+    def render_top_menu(self):
+        super().render_top_menu()
+        if self.debug_menu_enabled:
+            if imgui.begin_menu("Debug"):
+                if menu_item("Show Metrics/Debugger Window"):
+                    self._imgui_metrics_window_visible = True
+                if menu_item("Show EventLog Window"):
+                    self._imgui_log_window_visible = True
+                imgui.end_menu()
+        if self._imgui_metrics_window_visible:
+            self._imgui_metrics_window_visible = imgui.show_metrics_window(self._imgui_metrics_window_visible)
+        if self._imgui_log_window_visible:
+            self._imgui_log_window_visible = imgui.show_debug_log_window(self._imgui_log_window_visible)
