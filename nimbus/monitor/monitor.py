@@ -72,27 +72,6 @@ class MonitorAppData:
 #           - mostra warning caso nenhum UISystem esteja selecionado, e dropdown pra selecionar um.
 #       - Atalho teclado e right-click-menu permitem só dar QUIT e trocar pro modo EDIT.
 #       - talvez fullscreen? Se der pode ter setting separado pra ligar isso (e atalho/menu permitem mudar).
-#   * EDIT:
-#       - uma dockable window, com:
-#           * permite viewports, pra poder mover as abas pra fora (criando viewports)
-#           - Settings tab:
-#               - visualizador/editor de settings gerais do app
-#           - Main ou AllSystems tab:
-#               - lista todos systems existentes
-#                   - permite deletar system
-#                   - permite ligar pra editar tal system (abre tab/window nova)
-#                   - permite ligar pra visualizar tal system (abre tab/window nova)
-#               - permite criar system novo
-#               - permite selecionar um system: ou via a lista ou via um dropdown separado
-#               * talvez dê pra "mergar" essa tab com a de Settings, já que a de settings deve ser pouca coisa a principio
-#           - Visualiza System X tab:
-#               - simplesmente faz render() de um system especifico que tá instanciado
-#               - user pode fechar essa janela/tab
-#           - Edit System X tab:
-#               - mostra o edit_render() de um system especifico.
-#               - user pode fechar essa janela/tab
-#               - ao editar o system, recriar ele na aba de Visualiza X, caso ela exista.
-#               - permite salvar o system
 #   - COMMAND LINE ARGS:
 #       - arg pra forcar abrir em um modo ou outro
 #       - arg pra forcar o UISystem selecionado
@@ -377,7 +356,6 @@ class MonitorMainWindow(windows.BasicWindow):
         return True, "valid"
 
 
-# TODO: desabilitar scroll-bars na janela imgui
 class MonitorDisplaySystemWindow(windows.BasicWindow):
     """Sub-window used by `MonitorApp` to render a UISystem."""
 
@@ -389,7 +367,8 @@ class MonitorDisplaySystemWindow(windows.BasicWindow):
 
     def render(self):
         region_id = repr(self)
-        imgui.begin_child(region_id)
+        window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
+        imgui.begin_child(region_id, window_flags=window_flags)
         imgui.push_id(region_id)
         system = self.parent.opened_systems.get(self.system_name)
         if system:

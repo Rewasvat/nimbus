@@ -148,7 +148,8 @@ class UISystem:
         """Renders this system in the current region."""
         self._root_node.on_update.trigger()
 
-        imgui.begin_child(f"{repr(self)}AppRootWidget")
+        window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
+        imgui.begin_child(f"{repr(self)}AppRootWidget", window_flags=window_flags)
         if self.root_widget is not None:
             self.root_widget._set_pos_and_size()
             self.root_widget.render()
