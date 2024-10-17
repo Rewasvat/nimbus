@@ -180,6 +180,9 @@ class WidgetsTestApp(windows.AppWindow):
         edit_window = self.get_edit_window(name)
         if edit_window:
             edit_window.hide()
+        # If system was the selected one, clear that
+        if self.data.selected_system == name:
+            self.data.selected_system = None
         click.secho(f"Deleted system {name}", fg="green")
 
     def open_system_display(self, name: str):
@@ -289,10 +292,11 @@ class MonitorMainWindow(windows.BasicWindow):
         imgui.text("UI Systems:")
         flags = imgui.TableFlags_.row_bg | imgui.TableFlags_.borders_h | imgui.TableFlags_.resizable
         flags |= imgui.TableFlags_.hideable | imgui.TableFlags_.sortable
-        if imgui.begin_table("SystemConfigs", 6, flags):
+        if imgui.begin_table("SystemConfigs", 7, flags):
             imgui.table_setup_scroll_freeze(1, 1)
             imgui.table_setup_column("Name")
             imgui.table_setup_column("Num Nodes")
+            imgui.table_setup_column("Main")
             imgui.table_setup_column("Display")
             imgui.table_setup_column("Edit")
             imgui.table_setup_column("Initialized")
@@ -309,6 +313,15 @@ class MonitorMainWindow(windows.BasicWindow):
 
                 imgui.table_next_column()
                 imgui.text(str(config.num_nodes))
+
+                imgui.table_next_column()
+                if imgui.radio_button("##", self.parent.data.selected_system == config.name):
+                    self.parent.data.selected_system = config.name
+                imgui.set_item_tooltip("\n".join([
+                    "Selects the 'main' UI System.",
+                    "",
+                    "The main system is the one used by default by the Monitor app when running in DISPLAY mode.",
+                ]))
 
                 imgui.table_next_column()
                 if self.parent.has_display_window(config.name):
