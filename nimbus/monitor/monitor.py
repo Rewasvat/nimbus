@@ -23,21 +23,27 @@ class MonitorManager(metaclass=cmd_utils.Singleton):
         return "monitor"
 
     @cmd_utils.instance_command()
-    def open(self):
-        """Opens the System Monitor GUI."""
-        if not utils.is_admin_user():
+    @click.option("--test", "-t", is_flag=True, help="Use dummy testing sensors")
+    def open(self, test):
+        """Opens the System Monitor GUI in DISPLAY mode."""
+        if test:
+            sensors.ComputerSystem().open(True)
+        elif not utils.is_admin_user():
             click.secho("Can't run the System Monitor GUI without admin permissions!", fg="red")
-            return
-        # monitor = MonitorApp()
-        # monitor.run()
+            # return
+        app = SystemMonitorApp(False)
+        app.run()
 
     @cmd_utils.instance_command()
     @click.option("--test", "-t", is_flag=True, help="Use dummy testing sensors")
-    def widgets(self, test):
-        """Opens a debug GUI for testing the Widget System."""
+    def edit(self, test):
+        """Opens the System Monitor GUI in EDIT mode."""
         if test:
             sensors.ComputerSystem().open(True)
-        app = WidgetsTestApp()
+        elif not utils.is_admin_user():
+            click.secho("Can't run the System Monitor GUI without admin permissions!", fg="red")
+            # return
+        app = SystemMonitorApp(True)
         app.run()
 
 
@@ -49,6 +55,8 @@ class MonitorAppData:
         """Amount of time (in secs) to update sensors."""
         self.selected_system: str = None
         """Name of the selected UISystem to display."""
+        self.in_edit_mode: bool = True
+        """If the Monitor is in Edit mode or in Display mode."""
 
     def save(self):
         """Saves the MonitorAppData to Nimbus' DataCache for persistence."""
@@ -68,37 +76,55 @@ class MonitorAppData:
 
 # TODO: refatorar MonitorApp pra ter 2 modos de display: EDIT e DISPLAY (names pending)
 #   * DISPLAY:
-#       - unica borderless-window, mostra só o UISystem selecionado.
-#           - mostra warning caso nenhum UISystem esteja selecionado, e dropdown pra selecionar um.
 #       - Atalho teclado e right-click-menu permitem só dar QUIT e trocar pro modo EDIT.
 #       - talvez fullscreen? Se der pode ter setting separado pra ligar isso (e atalho/menu permitem mudar).
 #   - COMMAND LINE ARGS:
-#       - arg pra forcar abrir em um modo ou outro
+#       + arg pra forcar abrir em um modo ou outro
 #       - arg pra forcar o UISystem selecionado
 #   - Pra trocar de um modo pra outro tem que recriar a janela:
 #       - salva dados ou valores no objeto, dá close() na janela. Altera attrs da janela, faz um run() de novo.
 #       - se fizer um overwrite do run(), daria pra ter tipo um while dentro dele sempre rodando o super.run(), então
 #         marcando certo attr/flag e fechando a janela, a nova seria aberta automatico.
-class WidgetsTestApp(windows.AppWindow):
-    """TODO teste pro sistema de Widgets, talvez deletar depois?
+class SystemMonitorApp(windows.AppWindow):
+    """System Monitor App.
 
-    System Monitor App.
+    This is the main System Monitor App, opened by the ``monitor open`` or ``monitor edit`` commands, which allows
+    the use of UI Systems. A UI System is a user-configurable GUI system that can display widgets, sensor data (from
+    the local machine), supports interactions, and more.
 
-    This is the main System Monitor App Window, opened by the ``monitor open`` command.
-    It opens a GUI that shows the state of the system's sensors, allowing the user to configure
-    how to see them, amongst other things.
+    Which actual window is opened along with this App depends if `edit_mode`  is selected or not. According to it, the opened window is:
+    * The EDIT Window: allows user to create, edit, visualize and delete UI Systems, as well as select the `main` system.
+    This is a regular window, that supports viewports and docking nodes to allow user to see/edit multiple systems at once
+    across several monitors.
+    * The DISPLAY Window: only allows user to visualize (and interact with) the selected `main` system. This is a borderless
+    window.
+
+    NOTE: for now, while the edit_mode flag is persisted, it must be used manually by passing it as arg to the constructor,
+    forcing to use one mode or the other. The two different commands (``open``/``edit``) do this. Its because trying to change
+    the mode (and window) programatically during the same Nimbus session caused several issues... So for now this way it works.
     """
 
-    def __init__(self):
-        self._in_edit_mode = True
-        super().__init__("System Monitor", windows.RunnableAppMode.DOCK)
-        self.data = MonitorAppData.load()
-        self._reset_window_attrs()
+    def __init__(self, force_edit_mode=None):
+        data = MonitorAppData.load()
+        if force_edit_mode is not None:
+            data.in_edit_mode = force_edit_mode
+        title_suffix = "Edit" if data.in_edit_mode else "Display"
+        super().__init__(f"System Monitor {title_suffix}", windows.RunnableAppMode.DOCK)
+        self.data = data
+        self.do_restart = False
         from nimbus.utils.imgui.widgets import UISystem, UIManager
         self.system_manager = UIManager()
-        self.system: UISystem = None
         self.opened_systems: dict[str, UISystem] = {}
-        self.children.append(MonitorMainWindow(self))
+        self._reset_window_attrs()
+
+    @property
+    def _in_edit_mode(self):
+        """If the Monitor app is in Edit mode (or in Display mode)."""
+        return self.data.in_edit_mode
+
+    @_in_edit_mode.setter
+    def _in_edit_mode(self, value: bool):
+        self.data.in_edit_mode = value
 
     def _reset_window_attrs(self):
         """Sets Basic/AppWindow attributes we inherit."""
@@ -107,11 +133,14 @@ class WidgetsTestApp(windows.AppWindow):
         self.show_menu_bar = self._in_edit_mode
         self.show_status_bar = self._in_edit_mode
         self.enable_viewports = self._in_edit_mode
+        self.use_borderless = not self._in_edit_mode
         self.debug_menu_enabled = True
 
     def render(self):
         if imgui.is_key_pressed(imgui.Key.escape):
             self.close()
+        if imgui.is_key_down(imgui.Key.left_ctrl) and imgui.is_key_pressed(imgui.Key.end):
+            self.change_mode()
 
         delta_t = imgui.get_io().delta_time
         sensors.ComputerSystem().timed_update(delta_t)
@@ -119,20 +148,21 @@ class WidgetsTestApp(windows.AppWindow):
         if self._in_edit_mode:
             self.update_closed_systems()
         else:
-            # TODO: all of this (display mode)
-            if self.system is not None:
-                self.system.render()
+            display_window = self.get_display_window(self.data.selected_system)
+            if display_window:
+                display_window.render()
 
     def on_init(self):
         super().on_init()
         computer = sensors.ComputerSystem()
         computer.open()
         computer.update_time = self.data.update_time
-        if not self._in_edit_mode:
-            # selected_config = self.system_manager.get_config(self.data.selected_system)
-            # if selected_config is not None:
-            #     self.system = selected_config.instantiate()
-            pass  # TODO: display mode initialization
+        self.children.clear()
+        self.update_closed_systems()
+        if self._in_edit_mode:
+            self.add_child_window(MonitorMainWindow(self))
+        else:
+            self.open_system_display(self.data.selected_system)
 
     def on_before_exit(self):
         for system in self.opened_systems.values():
@@ -141,6 +171,12 @@ class WidgetsTestApp(windows.AppWindow):
         # TODO: persistir systems abertos pra edicao/display?
         self.data.save()
         super().on_before_exit()
+
+    def change_mode(self):
+        """TODO"""
+        self._in_edit_mode = not self._in_edit_mode
+        self.do_restart = True
+        self.close()
 
     def create_new_system(self, name: str):
         """Creates a new UISystem config with the given NAME, if available.
@@ -270,7 +306,7 @@ class MonitorMainWindow(windows.BasicWindow):
     Used mainly when the Monitor is opened in EDIT mode, this allows setting app options, handling available UISystems, and more.
     """
 
-    def __init__(self, parent: WidgetsTestApp):
+    def __init__(self, parent: SystemMonitorApp):
         super().__init__("Monitor Main")
         self.parent = parent
         self.system_manager = parent.system_manager
@@ -372,7 +408,7 @@ class MonitorMainWindow(windows.BasicWindow):
 class MonitorDisplaySystemWindow(windows.BasicWindow):
     """Sub-window used by `MonitorApp` to render a UISystem."""
 
-    def __init__(self, system_name: str, parent: WidgetsTestApp):
+    def __init__(self, system_name: str, parent: SystemMonitorApp):
         super().__init__(f"Display: {system_name}")
         self.user_closable = True
         self.parent = parent
@@ -395,7 +431,7 @@ class MonitorDisplaySystemWindow(windows.BasicWindow):
 class MonitorEditSystemWindow(windows.BasicWindow):
     """Sub-window used by `MonitorApp` to render a UISystem's EDIT contents (graph, etc)."""
 
-    def __init__(self, system_name: str, parent: WidgetsTestApp):
+    def __init__(self, system_name: str, parent: SystemMonitorApp):
         super().__init__(f"Edit: {system_name}")
         self.user_closable = True
         self.parent = parent
