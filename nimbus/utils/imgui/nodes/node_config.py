@@ -177,6 +177,13 @@ class NodeConfig:
 
         # All Node classes are expected to be instantiable without arguments.
         node = self._node_class()
+        # NOTE: There has been cases of loading previously saved Node data and somehow their positions are SO
+        # wrong that no nodes are displayed in the editor and fit-to-window doesn't work. And if a new node is created, then fit-to-windowed,
+        # app crashes.
+        #   When this happens, manually resetting all nodes positions to (0, 0) here solved it. Afterwards new positions can be saved and
+        # apparently work.
+        #   --> Theory is that this "corrupted saved positions" happened when AppWindow using these nodes changed names (which kind of fucked up
+        #       session memory and persisted window data)
         imgui_node_editor.set_node_position(node.node_id, self._area.position)
 
         # Setup node's custom data.
