@@ -21,7 +21,7 @@ class BasicWindow(hello_imgui.DockableWindow):
         super().__init__(label_=title, gui_function_=self._window_gui_render)
         self.children: list[BasicWindow] = []
         """The children window (dockable sub-windows) of this container."""
-        self.has_menu = False
+        self.has_menu: bool = False
         """If this window has a top-menu to be rendered by its parent window. If so, our `self.render_top_menu()` will be called by the parent."""
         self.force_size: Vector2 = None
         """Sets a forced size for this window.
@@ -159,22 +159,22 @@ class AppWindow(BasicWindow):
     def __init__(self, title: str, mode: RunnableAppMode):
         """Constructs a new AppWindow instance with the given TITLE and MODE."""
         super().__init__(title)
-        self.mode = mode
+        self.mode: RunnableAppMode = mode
         """The Runnable Mode of this App Window"""
-        self.restore_previous_window = True
+        self.restore_previous_window: bool = True
         """If the window should restore its previous position/size from another run."""
-        self.show_status_bar = True
+        self.show_status_bar: bool = True
         """If the window should have its bottom status-bar.
 
         The status-bar is usually used to show small, always available widgets.
         Its contents can be customized via overwriting `self.render_status_bar()`.
         Some default IMGUI elements may be selected in the status-bar using the VIEW Menu."""
-        self.show_menu_bar = True
+        self.show_menu_bar: bool = True
         """If the window should have its top menu-bar.
 
         The menu-bar is usually used to show menus for different functions of the app.
         Its contents can be customized via overwriting `self.render_menus()`."""
-        self.show_app_menu = True
+        self.show_app_menu: bool = True
         """Enables the 'APP' menu in the menu-bar(needs the menu bar to be enabled).
 
         This is the first menu in the bar, and usually shows the most basic/central app features.
@@ -183,7 +183,7 @@ class AppWindow(BasicWindow):
         """
         self.app_menu_title: str = title
         """The title of the App Menu item. Defaults to the window's title. See `self.show_app_menu`."""
-        self.show_view_menu = True
+        self.show_view_menu: bool = True
         """Enables the 'VIEW' menu in the menu-bar(needs the menu bar to be enabled).
 
         The View menu is a IMGUI-based menu that allows the user to change aspects of the window's layout/content, such as changing options of
@@ -204,9 +204,20 @@ class AppWindow(BasicWindow):
         Since windows that can be closed by the user are simply set as not visible when closed, this essentially removes windows
         that have been closed by the user.
         """
-        self.debug_menu_enabled = True
+        self.debug_menu_enabled: bool = False
+        """If Imgui's Debug menu is enabled. This allow to check imgui's metrics and logs window for example and may help debug imgui issues.
+        This uses the top-menu bar, so that needs to be enabled."""
         self._imgui_metrics_window_visible = False
         self._imgui_log_window_visible = False
+        self.use_borderless: bool = False
+        """If the window will be borderless.
+
+        The window is still movable/closable/resizable as a regular window: by hovering the mouse in the top border to show a draggable region to
+        move the window and display the close button, and similarly in the bottom-right corner a region allows dragging to resize.
+
+        However, the resizing widget doesn't work well if the status-bar is enabled (see `show_status_bar`).
+        Also, regular OS window shortcuts won't work, such as double-clicking the title bar to maximize it.
+        """
 
     def run(self):
         """Runs this window as a new IMGUI App.
@@ -219,32 +230,37 @@ class AppWindow(BasicWindow):
         # App Window Params
         run_params.app_window_params.window_title = self.label
         run_params.app_window_params.restore_previous_geometry = self.restore_previous_window
+        run_params.app_window_params.borderless = self.use_borderless
+
+        # run_params.app_window_params.window_geometry.monitor_idx = 2
+        # # run_params.app_window_params.window_geometry.full_screen_mode = hello_imgui.FullScreenMode.full_monitor_work_area
+        # run_params.app_window_params.window_geometry.window_size_state = hello_imgui.WindowSizeState.maximized
 
         # IMGUI Window Params
-        run_params.callbacks.show_gui = self.render
         run_params.imgui_window_params.menu_app_title = self.label
         run_params.imgui_window_params.show_status_bar = self.show_status_bar
-        run_params.callbacks.show_status = self.render_status_bar
-
+        run_params.imgui_window_params.remember_status_bar_settings = False
         run_params.imgui_window_params.show_menu_bar = self.show_menu_bar
         run_params.imgui_window_params.show_menu_app = self.show_app_menu
         run_params.imgui_window_params.show_menu_view = self.show_view_menu
         run_params.imgui_window_params.menu_app_title = self.app_menu_title
+
+        # Window/runner callbacks.
+        run_params.callbacks.show_gui = self.render
+        run_params.callbacks.show_status = self.render_status_bar
         run_params.callbacks.show_menus = self.render_top_menu
         run_params.callbacks.show_app_menu_items = self.render_app_menu_items
-
-        # First, tell HelloImGui that we want full screen dock space (this will create "MainDockSpace")
-        if self.mode == RunnableAppMode.DOCK:
-            run_params.imgui_window_params.default_imgui_window_type = (
-                hello_imgui.DefaultImGuiWindowType.provide_full_screen_dock_space
-            )
-        run_params.imgui_window_params.enable_viewports = self.enable_viewports
-        run_params.docking_params.dockable_windows = self.children
-
-        run_params.ini_folder_type = hello_imgui.IniFolderType.home_folder
         run_params.callbacks.before_exit = self.on_before_exit
         run_params.callbacks.post_init = self.on_init
         run_params.callbacks.pre_new_frame = self.on_pre_new_frame
+
+        # First, tell HelloImGui that we want full screen dock space (this will create "MainDockSpace")
+        if self.mode == RunnableAppMode.DOCK:
+            run_params.imgui_window_params.default_imgui_window_type = hello_imgui.DefaultImGuiWindowType.provide_full_screen_dock_space
+            run_params.docking_params.dockable_windows = self.children
+        run_params.imgui_window_params.enable_viewports = self.enable_viewports
+
+        run_params.ini_folder_type = hello_imgui.IniFolderType.home_folder
 
         run_params.fps_idling.enable_idling = True
         run_params.fps_idling.fps_idle = 1
@@ -330,7 +346,12 @@ class AppWindow(BasicWindow):
 
         Sub classes may override this to add their own exit logic. The default implementation does nothing.
         """
-        pass
+        from nimbus.utils.imgui.fonts import FontDatabase
+        font_db = FontDatabase()
+        # With the App (main Imgui Window) closing, it means the imgui context will be deleted.
+        # That means all stored fonts will stop working. So we need to clear them in-case another App Window
+        # is created in this same session.
+        font_db.clear()
 
     def on_pre_new_frame(self):
         """Callback called each frame, but before IMGUI starts rendering the frame (that is, before ``imgui.new_frame()``).
@@ -359,7 +380,7 @@ class AppWindow(BasicWindow):
         # Update dockable children windows list
         # NOTE: this has to be done this way, resetting the entire list. Changing the dockable_windows list
         # with append/remove/etc doesn't work.
-        if reset_dockable_windows:
+        if reset_dockable_windows and self.mode == RunnableAppMode.DOCK:
             run_params.docking_params.dockable_windows = self.children
 
     def add_child_window(self, child: BasicWindow):

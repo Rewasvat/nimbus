@@ -88,7 +88,14 @@ class FontCache:
         stashed_font = self.fonts.get(int(imfont.font_size), None)
         return stashed_font == imfont
 
+    def clear(self):
+        """Clears this font cache, releasing resources."""
+        self.fonts.clear()
+        self.loading_fonts.clear()
 
+
+# TODO: o cache só funciona pra 1 AppWindow (um imgui context) aberto ao mesmo tempo.
+#   a font é ligada ao contexto OpenGL, q é ligado ao AppWindow.
 class FontDatabase(metaclass=cmd_utils.Singleton):
     """Singleton database of fonts to use with IMGUI.
 
@@ -234,3 +241,8 @@ class FontDatabase(metaclass=cmd_utils.Singleton):
             return Vector2(0, abs(imfont.descent) * 2)
         else:
             return Vector2(0, abs(imfont.descent) * 3)
+
+    def clear(self):
+        """Clear all FontCaches, releasing all stored resources."""
+        for cache in self.fonts.values():
+            cache.clear()
