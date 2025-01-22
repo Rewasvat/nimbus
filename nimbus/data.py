@@ -63,6 +63,7 @@ def update_module_path_in_pickled_object(pickle_path: str, old_module_path: str,
     pickle.dump(dic, open(pickle_path, "wb"))
 
 
+# TODO: mover pro UTILS. Idéia é o utils ser uma libzinha de coisas que poderiam ser reusadas em outros projetos.
 class DataCache(metaclass=Singleton):
     """Singleton class that holds Nimbus's global state. This can be used by other scripts to store/access
     global data as a kind of cache."""
@@ -79,6 +80,9 @@ class DataCache(metaclass=Singleton):
         self.base_path = ""
         self.set_cache_path(os.path.expanduser("~"))
 
+    # TODO: refatorar esses prefixos de chave `nimbus_` como tem aqui e em vários outros lugares (e talvez em outros módulos), pra ser dinamico.
+    #   isso facilitaria usar essa classe em outros projetos.
+    #   o ideal seria conseguir pegar o nome do projeto/pacote ou aplicativo que tá usando essa lib somehow.
     def set_cache_path(self, path):
         """Sets the folder in which this DataCache instance will save data. This defaults to the user's home folder ('~').
         Files saved have the same name independently of the folder in which they were saved."""
@@ -250,14 +254,14 @@ class DataCache(metaclass=Singleton):
         return keyring.get_password(self.service_id, user_key)
 
     def shutdown(self):
-        """Performs any actions necessary to release resources and shutdown this MaestroState instance.
-        Usually this is called by Maestro before closing, after executing any commands."""
+        """Performs any actions necessary to release resources and shutdown this DataCache instance.
+        Usually this is called by the app before closing, after executing any commands."""
         self.save_data()
         for listener in self.shutdown_listeners:
             listener()
 
     def add_shutdown_listener(self, listener: Callable[[], None]):
-        """Registers the given callable to be called when Maestro is shut down.
+        """Registers the given callable to be called when the DataCache is shut down.
 
         This method may be used as a decorator.
         """

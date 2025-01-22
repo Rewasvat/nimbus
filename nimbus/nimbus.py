@@ -6,6 +6,11 @@ import nimbus.utils.utils as utils
 from nimbus.data import DataCache
 
 
+# TODO: Refatorar essa classe pra ser parte do Utils, que poderia ser refatorado como uma lib externa.
+#   assim facilitaria usar esse sistema em outros projetos.
+#   - o código abaixo aqui, que instancia o DynamicGroup com essa classe, e adiciona o help-options e tal
+#     poderia ser um class-method. Ai o uso disso em outros projetos seria instanciar a classe (ou herdar dela),
+#     e usar tal class-method pra criar o objeto do grupo em si que seria o main do projeto.
 class NimbusCommands:
     """Collection of personal scripts and other utilities organized in a simple to use CLI.
 

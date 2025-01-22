@@ -7,6 +7,8 @@ from enum import Enum
 from typing import Generator
 
 
+# TODO: permitir usar outras fontes externas
+# TODO: permitir usar a fonte padrão do imgui-bundle, mas carregando ela em outros tamanhos e tal como fazemos aqui.
 class Fonts(Enum):
     """Available fonts to use with FontDatabase and the Widgets system."""
     LCARS = "Antonio-Regular"
