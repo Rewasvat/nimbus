@@ -293,6 +293,15 @@ class NodeDataProperty(types.ImguiProperty):
         return self.metadata.get("dynamic_input_pins", False)
 
     @property
+    def allow_sync(self) -> bool:
+        """If true, DataPins created by this data property will use the `SyncedDataPropertyState`
+        instead of the regular DataPropertyState.
+
+        This allows other states to sync to them, sharing get/set method calls.
+        """
+        return self.metadata.get("allow_sync", False)
+
+    @property
     def data_pins(self) -> dict[Node, DataPin]:
         """Internal mapping of Nodes to the DataPins that this property has created.
         The nodes are the instances of the class that owns this property."""
@@ -333,7 +342,10 @@ class NodeDataProperty(types.ImguiProperty):
         """
         pin: DataPin = self.data_pins.get(obj)
         if pin is None:
-            state = DataPropertyState(self)
+            if self.allow_sync:
+                state = SyncedDataPropertyState(self)
+            else:
+                state = DataPropertyState(self)
             state.set_initial_value(obj)
             pin = self.pin_class(obj, state)
             self.data_pins[obj] = pin
@@ -429,6 +441,38 @@ class DataPropertyState(DataPinState):
 
     def subtypes(self):
         return self.property.get_value_subtypes()
+
+
+class SyncedDataPropertyState(DataPropertyState):
+    """Specialized DataProperty state that is optionally associated (synced) to another DataPinState.
+    * When this is a output-pin, `get()`s will return the synced pin's value, if available.
+    * When this is a input-pin, `set()`s will set the value in the synced state, if available.
+    Otherwise, this behaves as a regular DataPropertyState.
+
+    DataPins are created by a NodeDataProperty using this state if the properties have the
+    ``allow_sync`` flag.
+    """
+
+    def __init__(self, prop: NodeDataProperty):
+        super().__init__(prop)
+        self.synced_state: DataPinState = None
+        self._loop_check = False
+
+    def get(self):
+        if self.synced_state is not None and self.kind is PinKind.output:
+            if self._loop_check:
+                return super().get()
+            self._loop_check = True
+            value = self.synced_state.parent_pin.get_value()
+            self._loop_check = False
+            return value
+        return super().get()
+
+    def set(self, value):
+        if self.synced_state is not None and self.kind is PinKind.input:
+            self.synced_state.set(value)
+            return
+        super().set(value)
 
 
 class DynamicAddInputPin(DataPin):

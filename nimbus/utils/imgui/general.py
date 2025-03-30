@@ -1,5 +1,6 @@
 from enum import Enum, Flag
 from typing import Callable
+from contextlib import contextmanager
 from imgui_bundle import imgui, ImVec2, ImVec4
 
 
@@ -258,6 +259,38 @@ def object_creation_menu(cls: type, name_getter: Callable[[type], str] = None):
             imgui.end_menu()
     return obj
 
+
+@contextmanager
+def id_block(id: str):
+    """Context manager for a IMGUI ID block.
+
+    Pushes the given ID to IMGUI, yields, and finally pops the ID.
+
+    Args:
+        id (str): ID to push to imgui's ID stack.
+    """
+    imgui.push_id(id)
+    yield
+    imgui.pop_id()
+
+
+@contextmanager
+def child_region(region_id: str, size: ImVec2 = (0, 0), child_flags: imgui.ChildFlags_ = 0, window_flags: imgui.WindowFlags_ = 0):
+    """Context manager for a IMGUI Child Region.
+
+    Begins a child-region, pushes imgui ID, and then yields. Afterwards, pops the ID and ends the child-region.
+
+    Args:
+        region_id (str): ID used for the child-region and pushed imgui-ID.
+        size (ImVec2, optional): Size of the child region. Defaults to (0, 0), which takes all available space.
+        child_flags (imgui.ChildFlags_, optional): Imgui Child region flags. Defaults to 0.
+        window_flags (imgui.WindowFlags_, optional): Imgui Window flags. Defaults to 0.
+    """
+    imgui.begin_child(region_id, size=size, child_flags=child_flags, window_flags=window_flags)
+    imgui.push_id(region_id)
+    yield
+    imgui.pop_id()
+    imgui.end_child()
 
 # ============== Base Widgets (generic for any theme?)
 # TODO: suportar drag&drop pra mover widgets? simple (ou base) widgets seriam objetos moviveis, enquanto
