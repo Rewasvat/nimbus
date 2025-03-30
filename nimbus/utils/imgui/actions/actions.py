@@ -15,13 +15,21 @@ class ActionFlow(NodePin):
     When a action executes, it triggers some of its output flow pins. These will then
     trigger the input-flow pins they're connected to, thus triggering those pin's actions.
 
-    Input Flow pins are expected to be in Action nodes, for triggering them.
+    Input Flow pins are expected to be in Action nodes, for triggering them (they call `node.execute()`).
     Output Flow pins however may be present in any kind of nodes, as other sources of flow execution.
     """
 
     def __init__(self, parent: Node, kind: PinKind, name="FLOW"):
         super().__init__(parent, kind, name)
         self.parent_node: Action = parent  # to update type-hint.
+        self.synced_to_flow: ActionFlow = None
+        """ActionFlow pin we're synced to.
+
+        If the synced-to-pin is available and we're an input-pin, then when this pin is triggered we'll actually trigger the
+        synced-to-pin instead. This works similarly to the usual ActionFlow pin linking logic, but restricted to a single pin,
+        and working across different UISystems. Thus this is mainly used for the sub-system feature (see `UseSystem` node),
+        allowing an UISystem to use another (sub)system internally as a node.
+        """
 
     def draw_node_pin_contents(self):
         draw = imgui.get_window_draw_list()
@@ -60,7 +68,10 @@ class ActionFlow(NodePin):
         if self.pin_kind == PinKind.input:
             # If we are a input flow pin, we just execute our node.
             try:
-                self.parent_node.execute()
+                if self.synced_to_flow:
+                    self.synced_to_flow.trigger()
+                else:
+                    self.parent_node.execute()
             except Exception:
                 # TODO: melhorar msg pra ser mais fácil identificar qual action node que falhou.
                 click.secho(f"Error while executing action {self.parent_node}:\n{traceback.format_exc()}", fg="red")

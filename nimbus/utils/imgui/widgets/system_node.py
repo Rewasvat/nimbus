@@ -5,7 +5,7 @@ from nimbus.utils.imgui.nodes import PinKind, input_property, output_property
 from nimbus.utils.imgui.nodes.nodes_data import DataPin, DataPinState, SyncedDataPropertyState
 from nimbus.utils.imgui.widgets.system import UIManager, UISystem, SystemConfig
 from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
-from nimbus.utils.imgui.actions.actions import Action
+from nimbus.utils.imgui.actions.actions import Action, ActionFlow
 from imgui_bundle import imgui
 
 
@@ -24,7 +24,7 @@ class UseSystem(LeafWidget):
         self.node_bg_color = Color(0.1, 0.25, 0.15, 0.75)
         self.node_header_color = WidgetColors.External
         self._system: UISystem = None
-        self._system_pins: list[DataPin] = []
+        self._system_pins: list[ActionFlow | DataPin] = []
 
     @types.string_property()
     def system_name(self) -> str:
@@ -64,8 +64,8 @@ class UseSystem(LeafWidget):
         data = super().get_custom_config_data()
         data["system_name"] = self.system_name
         for pin in self._system_pins:
-            if pin.pin_kind is PinKind.output:
-                # No need to store output data
+            if pin.pin_kind is PinKind.output or isinstance(pin, ActionFlow):
+                # No need to store output data nor store anything for the action pins.
                 continue
             data[f"Input_{pin.pin_name}"] = pin.get_value()
         return data
@@ -112,14 +112,24 @@ class UseSystem(LeafWidget):
         self._system = config.instantiate()
         # Create input-pin (for us) synced to the value output-pin of the sub-system's Input nodes.
         for innode in self._system.input_nodes:
-            state = SyncedToState(innode)
-            pin = DataPin(self, state)
+            if isinstance(innode, SystemActionInput):
+                pin = ActionFlow(self, PinKind.input, innode.name)
+                pin.pin_tooltip = innode.description
+                pin.synced_to_flow = innode.flow_pin
+            else:
+                state = SyncedToState(innode)
+                pin = DataPin(self, state)
             self.add_pin(pin)
             self._system_pins.append(pin)
         # Create output-pin (for us) synced to the value input-pin of the sub-system's Output nodes.
         for outnode in self._system.output_nodes:
-            state = SyncedToState(outnode)
-            pin = DataPin(self, state)
+            if isinstance(outnode, SystemActionOutput):
+                pin = ActionFlow(self, PinKind.output, outnode.name)
+                pin.pin_tooltip = outnode.description
+                outnode.flow_pin.synced_to_flow = pin
+            else:
+                state = SyncedToState(outnode)
+                pin = DataPin(self, state)
             self.add_pin(pin)
             self._system_pins.append(pin)
 
@@ -144,6 +154,35 @@ class SystemAction(Action):
         node that is connected to this Input/Output node."""
 
 
+# SystemAction subclasses for action-flow input/output
+class SystemActionInput(SystemAction):
+    """Allows receiving a ActionFlow execution trigger from outside this UISystem, when it is used as a subsystem
+    by another UISystem."""
+
+    def __init__(self):
+        super().__init__()
+        self.flow_pin = ActionFlow(self, PinKind.output, "External Trigger")
+        self.add_pin(self.flow_pin)
+
+    def execute(self):
+        pass
+
+
+class SystemActionOutput(SystemAction):
+    """Allows sending a ActionFlow execution trigger to outside this UISystem, when it is used as a subsystem
+    by another UISystem."""
+
+    def __init__(self):
+        super().__init__()
+        # esse flow-pin input precisa ser syncado com o pin equivalente no UseSystem. O UseSystem vai cuidar disso.
+        self.flow_pin = ActionFlow(self, PinKind.input, "Execute External")
+        self.add_pin(self.flow_pin)
+
+    def execute(self):
+        pass
+
+
+# Create SystemAction subclasses for data input/output
 for cls in types.TypeDatabase().get_creatable_types():
     # Create SystemInput<T> node
     @output_property(value_type=cls, allow_sync=True)
