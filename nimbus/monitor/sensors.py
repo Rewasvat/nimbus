@@ -475,7 +475,7 @@ class InternalSensorEditor(types.TypeEditor):
         return self._docs
 
     def draw_value_editor(self, value: SensorID):
-        flags = imgui.SelectableFlags_.dont_close_popups
+        flags = imgui.SelectableFlags_.no_auto_close_popups
         return drop_down(value, self.sensor_options, self.sensor_docs, default_doc=self.attr_doc, item_flags=flags)
 
     def _populate_options(self):

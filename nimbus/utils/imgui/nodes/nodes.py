@@ -502,6 +502,7 @@ class NodePin:
             name = " ".join(s.capitalize() for s in name.split("_"))
 
         if self.pin_kind == PinKind.output:
+            imgui.spring(1)
             imgui.text_unformatted(name)
         self.draw_node_pin_contents()
         if self.pin_kind == PinKind.input:

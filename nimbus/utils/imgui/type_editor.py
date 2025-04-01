@@ -226,7 +226,7 @@ class ImguiProperty(AdvProperty):
         """
         config = self.metadata.copy()
         if "doc" not in config:
-            config["doc"] = self.__doc__
+            config["doc"] = self.__doc__ or ""
         return config
 
     def get_editor(self, obj):

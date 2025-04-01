@@ -1,6 +1,6 @@
 import nimbus.utils.imgui.actions as actions
 import nimbus.utils.command_utils as cmd_utils
-from imgui_bundle import imgui
+from imgui_bundle import imgui, imgui_node_editor  # type: ignore
 from nimbus.utils.imgui.general import object_creation_menu, menu_item
 from nimbus.utils.imgui.nodes import Node, NodePin, NodeLink, NodeEditor, PinKind, output_property
 from nimbus.utils.imgui.nodes.node_config import SystemConfig
@@ -133,6 +133,7 @@ class UISystem:
         self.node_editor = NodeEditor(self.render_node_editor_context_menu)
         if nodes is None:
             self._root_node = SystemRootNode(self)
+            imgui_node_editor.set_node_position(self._root_node.node_id, (0, 0))
             self.node_editor.nodes.append(self._root_node)
         else:
             self._root_node: SystemRootNode = nodes[0]
@@ -154,10 +155,16 @@ class UISystem:
 
         window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
         imgui.begin_child(f"{repr(self)}AppRootWidget", window_flags=window_flags)
+        # Draw a solid background-color rect in the background, to ensure our background is as expected.
+        pos = imgui.get_cursor_screen_pos()
+        size = imgui.get_content_region_avail()
+        imgui.get_window_draw_list().add_rect_filled(pos, pos + size, Colors.background.u32)
+        # Render widget tree hierarchy by starting with the root widget.
         if self.root_widget is not None:
             self.root_widget._set_pos_and_size()
             self.root_widget.render()
         else:
+            # If no root, check and render "create root widget context" menu
             if self.edit_enabled and imgui.begin_popup_context_window(f"{repr(self)}CreateRootWidgetMenu"):
                 imgui.text("Create Root Widget:")
                 self.render_create_widget_menu()

@@ -12,9 +12,9 @@ from imgui_bundle import imgui
 class UseSystem(LeafWidget):
     """Executes a UISystem.
 
-    This allows to execute one of the saved UISystem configs as single node in another graph.
+    This allows to execute one of the saved UISystem configs as a single node in another graph.
     The system's input/output properties (data values, widget connections, etc) are connected to equivalent
-    pins in this node, thus allowing to pass/receive data from the contained UISystem.
+    pins in this node, thus allowing to pass/receive data, actions and widgets from the contained UISystem.
 
     Allowing re-use of a UISystem in other systems may simplify a lot of work to create complex graphs.
     """

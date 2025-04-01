@@ -56,7 +56,7 @@ class Board(ContainerWidget):
         """Gets the selected slot. [GET]"""
         return self.get_slot(self._selected_name)
 
-    @types.string_property(options=[], option_flags=imgui.SelectableFlags_.dont_close_popups)
+    @types.string_property(options=[], option_flags=imgui.SelectableFlags_.no_auto_close_popups)
     def selected_name(self) -> str:
         """Gets the selected name. Change this to update which slot is displayed. [GET/SET]"""
         return self._selected_name

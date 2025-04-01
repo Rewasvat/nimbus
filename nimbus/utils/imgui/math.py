@@ -3,6 +3,12 @@ from imgui_bundle import imgui, ImVec2, ImVec4
 from nimbus.utils.imgui.colors import Color, Colors
 
 
+# NOTE: imgui-bundle now implements their own math-operators!
+#   at the moment this is kinda bad: some places may do vector math and expect a vector object in return, but then
+#   the op falls to some operator that isn't implemented here in Vector2, which makes the return a ImVec2 object
+#   and then it crashes... Usually the solution is implement the missing operator here, as was the case with `__imul__()`
+# NOTE: imgui-bundle now implements pickle support for ImVec2 and ImVec4 (colors). Our get/setstate operators where
+#   then conflicting with the base one and crashing. Our operators were disabled for now. This shouldn't be an issue though.
 class Vector2(ImVec2):
     """2D Vector class.
 
@@ -53,6 +59,9 @@ class Vector2(ImVec2):
             return self.__class__(self.x * other, self.y * other)
         return self.__class__(self[0] * other[0], self[1] * other[1])
 
+    def __imul__(self, other):
+        return self * other
+
     def __truediv__(self, other):
         """DIVISION: returns a new Vector2 instance with our values and ``other`` divided.
 
@@ -64,21 +73,24 @@ class Vector2(ImVec2):
             return self.__class__(self.x / other, self.y / other)
         return self.__class__(self[0] / other[0], self[1] / other[1])
 
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        return self.as_dict()
+    def __neg__(self):
+        return self.__class__(-self.x, -self.y)
 
-    def __setstate__(self, state: dict):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+    # def __getstate__(self):
+    #     """Pickle Protocol: overriding getstate to allow pickling this class.
+    #     This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+    #     """
+    #     return self.as_dict()
 
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        self.x = state.get("x", 0)
-        self.y = state.get("y", 0)
+    # def __setstate__(self, state: dict):
+    #     """Pickle Protocol: overriding setstate to allow pickling this class.
+    #     This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+
+    #     Use the data to rebuild this instance.
+    #     NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+    #     """
+    #     self.x = state.get("x", 0)
+    #     self.y = state.get("y", 0)
 
     def __float__(self):
         """``float(this)`` callback: converts Vector to a single float (the X component)."""
@@ -223,8 +235,8 @@ class Rectangle:
     """
 
     def __init__(self, pos: Vector2 = (0, 0), size: Vector2 = (0, 0)):
-        self._pos = Vector2(*pos)
-        self._size = Vector2(*size)
+        self._pos: Vector2 = Vector2(*pos)
+        self._size: Vector2 = Vector2(*size)
 
     @property
     def position(self):

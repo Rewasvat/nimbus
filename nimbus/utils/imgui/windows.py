@@ -194,9 +194,6 @@ class AppWindow(BasicWindow):
 
         Viewports allow imgui windows to be dragged outside the AppWindow, becoming other OS GUI windows (with a imgui style).
         """
-        self._pending_children: list[BasicWindow] = []
-        """List of child windows pending to add to this parent window.
-        This will be done (and this list cleared) at the ``on_pre_new_frame`` callback."""
         self.auto_remove_invisible_children: bool = True
         """If true (the default), the ``on_pre_new_frame`` callback will automatically remove from our ``self.children`` list
         any child windows that are not visible.
@@ -301,7 +298,7 @@ class AppWindow(BasicWindow):
             add_ons_params=addons
         )
 
-        self.store_settings_on_cache()
+        self.store_settings_on_cache(run_params)
 
     def render_status_bar(self):
         """Renders the contents of the window's bottom status-bar, if its enabled(see `self.show_status_bar`)
@@ -362,32 +359,14 @@ class AppWindow(BasicWindow):
 
         The default implementation of this callback in AppWindow updates our child windows with new windows from ``add_child_window``.
         """
-        # Add pending windows
-        run_params = hello_imgui.get_runner_params()
-        reset_dockable_windows = len(self._pending_children) > 0
-        for child in self._pending_children:
-            self.children.append(child)
-        self._pending_children.clear()
         # Remove not-visible children
         if self.auto_remove_invisible_children:
-            removed_windows = []
             for child in self.children:
                 if not child.is_visible:
-                    removed_windows.append(child)
-                    reset_dockable_windows = True
-            for child in removed_windows:
-                self.children.remove(child)
-        # Update dockable children windows list
-        # NOTE: this has to be done this way, resetting the entire list. Changing the dockable_windows list
-        # with append/remove/etc doesn't work.
-        if reset_dockable_windows and self.mode == RunnableAppMode.DOCK:
-            run_params.docking_params.dockable_windows = self.children
+                    self.remove_child_window(child)
 
     def add_child_window(self, child: BasicWindow):
         """Adds a new child window to this AppWindow.
-
-        The window is initially added in a "pending" state. In the next frame it'll be updated to a proper
-        child, being rendered and so on.
 
         Args:
             child (BasicWindow): child to add
@@ -396,12 +375,29 @@ class AppWindow(BasicWindow):
             bool: if child was added successfully. This may fail (returning False) if the given window is already
             a child of this object.
         """
-        if child not in self.children and child not in self._pending_children:
-            self._pending_children.append(child)
+        if child not in self.children:
+            self.children.append(child)
+            hello_imgui.add_dockable_window(child)
             return True
         return False
 
-    def store_settings_on_cache(self):
+    def remove_child_window(self, child: BasicWindow):
+        """Removes a child window from this AppWindow.
+
+        Args:
+            child (BasicWindow): child to remove
+
+        Returns:
+            bool: if child was removed successfully. This may fail (returning False) if given child window isn't
+            actually a child of this object.
+        """
+        if child in self.children:
+            hello_imgui.remove_dockable_window(child.label)
+            self.children.remove(child)
+            return True
+        return False
+
+    def store_settings_on_cache(self, run_params: hello_imgui.RunnerParams):
         """Stores the IMGUI settings files in the DataCache, and removes them from the disk.
 
         IMGUI (and separately the imgui-node-editor) generate a specific ``.ini`` (``.json`` for node-editor) file when it runs.
@@ -415,7 +411,6 @@ class AppWindow(BasicWindow):
         """
         cache = DataCache()
         # Store and remove INI Settings file
-        run_params = hello_imgui.get_runner_params()
         ini_path = hello_imgui.ini_settings_location(run_params)
         if os.path.isfile(ini_path):
             with open(ini_path) as f:

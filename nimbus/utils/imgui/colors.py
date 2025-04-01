@@ -73,23 +73,23 @@ class Color(ImVec4):
             return self.__class__(self.x / other, self.y / other, self.z / other, self.w / other)
         return self.__class__(self[0] / other[0], self[1] / other[1], self[2] / other[2], self[3] / other[3])
 
-    def __getstate__(self):
-        """Pickle Protocol: overriding getstate to allow pickling this class.
-        This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
-        """
-        return {"x": self.x, "y": self.y, "z": self.z, "w": self.w}
+    # def __getstate__(self):
+    #     """Pickle Protocol: overriding getstate to allow pickling this class.
+    #     This should return a dict of data of this object to reconstruct it in ``__setstate__`` (usually ``self.__dict__``).
+    #     """
+    #     return {"x": self.x, "y": self.y, "z": self.z, "w": self.w}
 
-    def __setstate__(self, state: dict[str, float]):
-        """Pickle Protocol: overriding setstate to allow pickling this class.
-        This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
+    # def __setstate__(self, state: dict[str, float]):
+    #     """Pickle Protocol: overriding setstate to allow pickling this class.
+    #     This receives the ``state`` data returned from ``self.__getstate__`` that was pickled, and now being unpickled.
 
-        Use the data to rebuild this instance.
-        NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
-        """
-        self.x = state.get("x", 0)
-        self.y = state.get("y", 0)
-        self.z = state.get("z", 0)
-        self.w = state.get("w", 0)
+    #     Use the data to rebuild this instance.
+    #     NOTE: the class ``self.__init__`` was probably NOT called according to Pickle protocol.
+    #     """
+    #     self.x = state.get("x", 0)
+    #     self.y = state.get("y", 0)
+    #     self.z = state.get("z", 0)
+    #     self.w = state.get("w", 0)
 
     def copy(self):
         """Returns a copy of this color."""

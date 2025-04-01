@@ -151,6 +151,8 @@ class SystemMonitorApp(windows.AppWindow):
             display_window = self.get_display_window(self.data.selected_system)
             if display_window:
                 display_window.render()
+            else:
+                imgui.text_colored(Colors.red, "No UISystem selected.\nOpen monitor in EDIT mode.")
 
     def on_init(self):
         super().on_init()
