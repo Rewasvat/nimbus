@@ -1,7 +1,11 @@
 # General utilities methods
 # Note: these should be fairly independent and not require import of other nimbus modules, in order to prevent circular references.
+import importlib.machinery
+import importlib.simple
+import importlib.util
 import re
 import os
+import sys
 import copy
 import glob
 import click
@@ -140,7 +144,7 @@ def load_all_modules(modules_path: str, import_path: str = None, ignore_paths=[]
     IMPORT_PATH then is the python-import-path prefix for the modules in MODULES_PATH. If None (the default),
     the IMPORT_PATH used will be the MODULES_PATH, with path-separators replaced by `.`
     """
-    def filter(module):
+    def filter(module: str):
         if ignore_paths and len(ignore_paths) > 0:
             for ig in ignore_paths:
                 if module.startswith(ig):
@@ -152,11 +156,34 @@ def load_all_modules(modules_path: str, import_path: str = None, ignore_paths=[]
         return
     if import_path is None:
         import_path = modules_path.replace(os.path.sep, ".")
-    modules = glob.glob(os.path.join(modules_path, "**/*.py"), recursive=True)
+    modules = walkpkg(modules_path)
     prefix = os.path.commonprefix(modules)
-    modules = [filepath.replace(prefix, "") for filepath in modules if os.path.isfile(filepath)]
-    modules = [name[:-3].replace(os.path.sep, ".") for name in modules if not name.endswith('__init__.py') and name.endswith(".py")]
-    modules = [importlib.import_module(f"{import_path}.{name}") for name in modules if filter(name)]
+    modules = [filepath.replace(prefix, "").replace(os.path.sep, ".") for filepath in modules]
+    if is_frozen():
+        modules = [importlib.import_module(name) for name in modules if name.startswith(import_path) and filter(name[len(import_path):])]
+    else:
+        modules = [importlib.import_module(f"{import_path}.{name}") for name in modules if filter(name)]
+
+    return modules
+
+
+def walkpkg(pkg_path: str):
+    """Recursively walks the given python package path (file-path notation), returning the full path to all individual
+    python scripts in the package.
+
+    Args:
+        pkg_path (str): base package path to search scripts for.
+
+    Returns:
+        list[str]: list of path for all scripts in the package. The `pkg_path` arg will be be included as prefix to all values.
+    """
+    import pkgutil
+    modules: list[str] = []
+    for mod in pkgutil.walk_packages([pkg_path], prefix=pkg_path+os.path.sep):
+        if mod.ispkg:
+            modules += walkpkg(mod.name)
+        else:
+            modules.append(mod.name)
     return modules
 
 
@@ -426,3 +453,25 @@ def is_unpickling(obj: object) -> bool:
         False otherwise (regular init call creating a new instance).
     """
     return getattr(obj, "__in_setstate", False)
+
+
+def is_frozen():
+    """Checks if this app is running in frozen-mode: as a standalone executable bundled by PyInstaller."""
+    return getattr(sys, "frozen", False)
+
+
+def print_all_files(path: str, indent=0):
+    """Pretty-prints to the output the names of all files and directories in the given PATH.
+
+    Also recursively calls this method with increased indentation (+4) for each directory in the PATH,
+    thus printing a full "tree" of names in the given PATH and all sub-directories.
+
+    Args:
+        path (str): Directory path to print all files.
+        indent (int, optional): Indentation of printed names for the given path. Each recursive call adds +4.
+    """
+    for s in os.listdir(path):
+        prefix = " "*indent
+        print(f"{prefix}* {s}")
+        if os.path.isdir(os.path.join(path, s)):
+            print_all_files(os.path.join(path, s), indent + 4)

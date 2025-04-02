@@ -1,9 +1,11 @@
+import os
 import clr
 
 # from C# .NET
 from System.Reflection import Assembly  # type: ignore
 
-dll_path = __file__.replace("native_api.py", "LibreHardwareMonitorLib.dll")
+dll_name = "LibreHardwareMonitorLib.dll"
+dll_path = os.path.join(os.path.dirname(__file__), dll_name)
 Assembly.UnsafeLoadFrom(dll_path)
 
 from LibreHardwareMonitor.Hardware import Computer, ISensor, SensorType  # type: ignore

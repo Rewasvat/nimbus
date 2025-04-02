@@ -24,5 +24,5 @@ setuptools.setup(
         "License :: Exclusive Copyright",
         "Operating System :: OS Independent",
     ],
-    install_requires=["Click>=8.1.0", "Colorama", "keyring", "imgui-bundle"]
+    install_requires=["Click>=8.1.0", "Colorama", "keyring", "imgui-bundle", "pyinstaller"]
 )

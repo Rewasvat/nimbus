@@ -251,7 +251,7 @@ def sub_group_getter(placeholder_name: str = None, options: list = None, help: s
     return decorator
 
 
-def sub_groups():
+def sub_groups(help: str = None):
     """CLI click group decorator to use with DynamicGroup.
 
     This marks a instance-method of the class as a 'get all sub-groups function'.

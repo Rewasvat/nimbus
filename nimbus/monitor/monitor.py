@@ -8,7 +8,7 @@ import nimbus.utils.imgui.general as imgui_utils
 from nimbus.utils.imgui.popups import button_with_confirmation, TextInputPopup
 from nimbus.utils.imgui.colors import Colors
 from nimbus.data import DataCache
-from imgui_bundle import imgui
+from imgui_bundle import imgui, imgui_ctx
 
 
 @cmd_utils.main_command_group
@@ -76,15 +76,21 @@ class MonitorAppData:
 
 # TODO: refatorar MonitorApp pra ter 2 modos de display: EDIT e DISPLAY (names pending)
 #   * DISPLAY:
-#       - Atalho teclado e right-click-menu permitem só dar QUIT e trocar pro modo EDIT.
-#       - talvez fullscreen? Se der pode ter setting separado pra ligar isso (e atalho/menu permitem mudar).
+#       - right-click menu:
+#           - QUIT
+#           - trocar pro EDIT (se for possível) (atalho de teclado pra isso)
+#           - opções pra mudar os settings (como no edit)? essas talvez tenham que reiniciar o app (reabrir a janela)...
+#   * EDIT:
+#       - poder configurar settings:
+#           - se DISPLAY mode vai ser borderless-window ou não
+#           - se DISPLAY mode vai ser fullscreen ou não
 #   - COMMAND LINE ARGS:
-#       + arg pra forcar abrir em um modo ou outro
 #       - arg pra forcar o UISystem selecionado
 #   - Pra trocar de um modo pra outro tem que recriar a janela:
-#       - salva dados ou valores no objeto, dá close() na janela. Altera attrs da janela, faz um run() de novo.
-#       - se fizer um overwrite do run(), daria pra ter tipo um while dentro dele sempre rodando o super.run(), então
-#         marcando certo attr/flag e fechando a janela, a nova seria aberta automatico.
+#       - tentar fechar/reabrir a janela não funciona direito, várias merdas na IMGUI em relação a isso...
+#       - no momento talvez melhor opção seria em standalone-mode, usar feature do pyinstaller pra reiniciar o app...
+#       - fora do standalone... se vira hahaha
+#           - Ver se é possivel fechar o python (exit no script) mas antes mandar rodar outro com os.system ou algo assim?
 class SystemMonitorApp(windows.AppWindow):
     """System Monitor App.
 
@@ -137,7 +143,7 @@ class SystemMonitorApp(windows.AppWindow):
         self.debug_menu_enabled = True
 
     def render(self):
-        if imgui.is_key_pressed(imgui.Key.escape):
+        if imgui.is_key_chord_pressed(imgui.Key.mod_ctrl | imgui.Key.mod_shift | imgui.Key.q):
             self.close()
         if imgui.is_key_down(imgui.Key.left_ctrl) and imgui.is_key_pressed(imgui.Key.end):
             self.change_mode()
@@ -148,11 +154,13 @@ class SystemMonitorApp(windows.AppWindow):
         if self._in_edit_mode:
             self.update_closed_systems()
         else:
-            display_window = self.get_display_window(self.data.selected_system)
-            if display_window:
-                display_window.render()
+            system = self.opened_systems.get(self.data.selected_system)
+            if system:
+                window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
+                with imgui_ctx.begin_child("SystemDisplay", window_flags=window_flags):
+                    system.render()
             else:
-                imgui.text_colored(Colors.red, "No UISystem selected.\nOpen monitor in EDIT mode.")
+                imgui.text_colored(Colors.red, "No UISystem selected.\nOpen monitor in EDIT mode to select a system.")
 
     def on_init(self):
         super().on_init()
@@ -164,7 +172,7 @@ class SystemMonitorApp(windows.AppWindow):
         if self._in_edit_mode:
             self.add_child_window(MonitorMainWindow(self))
         else:
-            self.open_system_display(self.data.selected_system)
+            self.update_opened_system(self.data.selected_system)
 
     def on_before_exit(self):
         for system in self.opened_systems.values():
@@ -176,6 +184,7 @@ class SystemMonitorApp(windows.AppWindow):
 
     def change_mode(self):
         """TODO"""
+        # TODO: no standalone mode isso talvez funcione com feature de "reiniciar" app do pyinstaller
         self._in_edit_mode = not self._in_edit_mode
         self.do_restart = True
         self.close()
@@ -321,6 +330,9 @@ class MonitorMainWindow(windows.BasicWindow):
         )
 
     def render(self):
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.q):
+            self.parent.close()
+
         new_system_name = self.new_system_popup.render()
         if new_system_name is not None:
             self.parent.create_new_system(new_system_name)
@@ -421,6 +433,8 @@ class MonitorDisplaySystemWindow(windows.BasicWindow):
         window_flags = imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
         imgui.begin_child(region_id, window_flags=window_flags)
         imgui.push_id(region_id)
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.q):
+            self.is_visible = False
         system = self.parent.opened_systems.get(self.system_name)
         if system:
             system.render()
@@ -444,6 +458,8 @@ class MonitorEditSystemWindow(windows.BasicWindow):
         region_id = repr(self)
         imgui.begin_child(region_id)
         imgui.push_id(region_id)
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.q):
+            self.is_visible = False
         system = self.parent.opened_systems.get(self.system_name)
         if system:
             system.render_edit()

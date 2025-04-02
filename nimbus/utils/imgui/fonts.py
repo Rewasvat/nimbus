@@ -1,3 +1,4 @@
+import os
 import nimbus.utils.command_utils as cmd_utils
 from nimbus.utils.imgui.math import Vector2
 from contextlib import contextmanager
@@ -7,8 +8,11 @@ from enum import Enum
 from typing import Generator
 
 
-# TODO: permitir usar outras fontes externas
-# TODO: permitir usar a fonte padrão do imgui-bundle, mas carregando ela em outros tamanhos e tal como fazemos aqui.
+# TODO: Refatorar como identificar as fontes nesse nosso sistema.
+#   * Seria melhor por PATH, mas tb aceitar "NOME"s que são tipo chaves pra outros PATHS
+#   * mover nossas fontes pro ASSETS/FONTS/
+#   * poderiamos aceitar todas fontes nessa pasta (incluindo as fontes default da imgui q tão lá)
+#   * Com essas mudanças, sistema ia ser mais genérico permitindo outras fontes, ia permitir tb uso das fontes default
 class Fonts(Enum):
     """Available fonts to use with FontDatabase and the Widgets system."""
     LCARS = "Antonio-Regular"
@@ -30,7 +34,7 @@ class FontCache:
 
     def __init__(self, font: Fonts):
         self.font = font
-        self.font_path = __file__.replace("fonts.py", f"{font.value}.ttf")
+        self.font_path = os.path.join(os.path.dirname(__file__), f"{font.value}.ttf")
         self.fonts: dict[int, imgui.ImFont] = {}
         self.loading_fonts: set[int] = set()
 
