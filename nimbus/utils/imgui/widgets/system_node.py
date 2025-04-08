@@ -4,12 +4,15 @@ from nimbus.utils.imgui.general import not_user_creatable
 from nimbus.utils.imgui.nodes import PinKind, input_property, output_property
 from nimbus.utils.imgui.nodes.nodes_data import DataPin, DataPinState, SyncedDataPropertyState
 from nimbus.utils.imgui.widgets.system import UIManager, UISystem, SystemConfig
-from nimbus.utils.imgui.widgets.base import LeafWidget, WidgetColors
+from nimbus.utils.imgui.widgets.base import LeafWidget, ContainerWidget, WidgetColors, Slot
 from nimbus.utils.imgui.actions.actions import Action, ActionFlow
 from imgui_bundle import imgui
 
 
-class UseSystem(LeafWidget):
+###########################################
+# MAIN USE SYSTEM NODE
+###########################################
+class UseSystem(ContainerWidget):
     """Executes a UISystem.
 
     This allows to execute one of the saved UISystem configs as a single node in another graph.
@@ -21,6 +24,8 @@ class UseSystem(LeafWidget):
 
     def __init__(self):
         super().__init__()
+        self.accepts_new_slots = False
+        self._slot_class = SystemSlot
         self.node_bg_color = Color(0.1, 0.25, 0.15, 0.75)
         self.node_header_color = WidgetColors.External
         self._system: UISystem = None
@@ -52,6 +57,9 @@ class UseSystem(LeafWidget):
 
     def render(self):
         self._handle_interaction()
+        # No need to call `self.update_slots()` here, since we have no logic to update them.
+        # Our 'SystemSlots' areas are actually directly updated by the ExternalWidgets that they render,
+        # from the internal sub-UISystem.
         if self._system is not None:
             self._system.render()
 
@@ -71,7 +79,6 @@ class UseSystem(LeafWidget):
         return data
 
     def setup_from_config(self, data):
-        super().setup_from_config(data)
         system_name = data.get("system_name", None)
         if system_name is None:
             # Stored data is incomplete, probably was saved before this implementation.
@@ -88,6 +95,7 @@ class UseSystem(LeafWidget):
                 continue
             pin: DataPin = self.get_input_pin(name[len(prefix):])
             pin.set_value(value)
+        super().setup_from_config(data)
 
     def _update_system_name_editor(self, editor: types.StringEditor):
         """Method automatically called by our ``system_name`` enum-property editor in order to dynamically
@@ -99,6 +107,9 @@ class UseSystem(LeafWidget):
         """Clears and removes our instantiated UISystem and all other related objects (such as Pins, etc)."""
         if self._system is None:
             return
+        # Remove all slots
+        for slot in self.slots:
+            slot.delete()
         # Remove dynamic pins from the system
         for pin in self._system_pins:
             pin.delete()
@@ -123,7 +134,11 @@ class UseSystem(LeafWidget):
             self._system_pins.append(pin)
         # Create output-pin (for us) synced to the value input-pin of the sub-system's Output nodes.
         for outnode in self._system.output_nodes:
-            if isinstance(outnode, SystemActionOutput):
+            if isinstance(outnode, ExternalWidget):
+                slot = SystemSlot(self, outnode)
+                self.add_new_slot(slot)
+                continue
+            elif isinstance(outnode, SystemActionOutput):
                 pin = ActionFlow(self, PinKind.output, outnode.name)
                 pin.pin_tooltip = outnode.description
                 outnode.flow_pin.synced_to_flow = pin
@@ -134,6 +149,9 @@ class UseSystem(LeafWidget):
             self._system_pins.append(pin)
 
 
+###########################################
+# Related Nodes to connect action-flows
+###########################################
 @not_user_creatable
 class SystemAction(Action):
     """Base class for UISystem input/output actions."""
@@ -182,6 +200,9 @@ class SystemActionOutput(SystemAction):
         pass
 
 
+###########################################
+# Related classes to connect data-pins
+###########################################
 # Create SystemAction subclasses for data input/output
 for cls in types.TypeDatabase().get_creatable_types():
     # Create SystemInput<T> node
@@ -242,3 +263,50 @@ class SyncedToState(DataPinState):
 
     def subtypes(self):
         return self.target_state.subtypes()
+
+
+###########################################
+# Related Nodes to connect widgets
+###########################################
+class ExternalWidget(LeafWidget):
+    """Allows the graph to link to an external Widget.
+
+    When using this UISystem as a node (or "subsystem") in another graph with the `UseSystem` node,
+    the `UseSystem` node will have a slot for each of these External Widgets, thus allowing the UISystem
+    using widgets that are defined outside its graph.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.node_bg_color = Color(0.1, 0.25, 0.15, 0.75)
+        self.node_header_color = WidgetColors.External
+        self.external_slot: SystemSlot = None
+
+    @input_property()
+    def name(self) -> str:
+        """Name to identify this External Widget when using this UISystem elsewhere."""
+
+    @input_property()
+    def description(self) -> str:
+        """Description of this External Widget property. Used as a tooltip for the pin in a UseSystem
+        node that is connected to this ExternalWidget node."""
+
+    def render(self):
+        if self.external_slot:
+            self.external_slot.area = self.area.copy()
+            self.external_slot.render()
+        self._handle_interaction()
+
+
+class SystemSlot(Slot):
+    """Slot for a UseSystem Container.
+
+    Meant for internal use by the UseSystem node: this slot is associated (1:1) with a `ExternalWidget` inside
+    the subsystem in the UseSystem node. That `ExternalWidget` that update and renders this slot.
+    """
+
+    def __init__(self, parent: ContainerWidget, external: ExternalWidget):
+        super().__init__(parent, external.name)
+        self.pin_tooltip = external.description
+        self.can_be_deleted = False
+        external.external_slot = self

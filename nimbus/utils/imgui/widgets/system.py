@@ -198,8 +198,9 @@ class UISystem:
     @property
     def output_nodes(self):
         """Gets all System Output nodes for this system. These are nodes that contain input-pins that return data from this system."""
-        from nimbus.utils.imgui.widgets.system_node import SystemAction
-        return [node for node in self.node_editor.nodes if isinstance(node, SystemAction) and "Output" in node.__class__.__name__]
+        from nimbus.utils.imgui.widgets.system_node import SystemAction, ExternalWidget
+        nodes = [node for node in self.node_editor.nodes if isinstance(node, ExternalWidget)]
+        return nodes + [node for node in self.node_editor.nodes if isinstance(node, SystemAction) and "Output" in node.__class__.__name__]
 
     def render_create_widget_menu(self, accepted_bases: list[type[BaseWidget]] = [BaseWidget]) -> BaseWidget | None:
         """Renders the contents for a menu that allows the user to create a new widget, given the possible options.
