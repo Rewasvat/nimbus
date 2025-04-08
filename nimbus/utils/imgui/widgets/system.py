@@ -102,14 +102,12 @@ class SystemRootNode(Node):
         imgui.set_item_tooltip("Saves the configuration of this UISystem to disk. This config can be later used to recreate/reuse this UISystem.")
 
 
-# TODO: opcao pra abrir edit, substituindo render-widgets. (não abre outra janela, nao mostra widgets).
-# TODO: opcao pra abrir edit em cima do render-widgets, tipo um overlay (nao abre outra janela, mostra widgets)
 # TODO: talvez de pra separar o "UISystem" em classes diferentes. Uma basica que seria só widgets, outra com widgets+actions,
 #       e finalmente uma com widget+actions+sensores
-# TODO: atalho de teclado pro save
 # TODO: widget novo: imagem. Scala a imagem para a area do slot. Pode escolher UV-coords usadas (sub-frames). Escolher imagem por path anywhere?
 # TODO: widget novo: polygon. Tipo o XAMLPath. User pode configurar vários shapes em runtime.
 #   - pra cada shape, user vai configurando segmentos, fill color, stroke color, stroke thickness, etc.
+#   - poder setar o aspect-ratio: se tamanho é relativo à widget area, ou relativo a um ratio fixo
 # TODO: Refatorar o NodeEditor pra ser um "System" básico, e esse UISystem iria herdar dele. Consequentemente tb refatorar o SystemConfig.
 #   isso permitiria que o sistema básico de nodes fosse mais genérico e fácil de usar em outros projetos. Atualmente não tem nada no sistema básico
 #   que permite cuidar/guardar/instanciar vários nodes de uma vez pq é o UISystem aqui que faz essa função, mas é algo importante pra um sistema de
@@ -176,6 +174,8 @@ class UISystem:
 
         This draws the system's graph editor, and as such would benefit from a large window/region to render in.
         """
+        if imgui.shortcut(imgui.Key.mod_ctrl | imgui.Key.s):
+            self.save_config()
         self.node_editor.render_system()
 
     def save_config(self):

@@ -187,7 +187,3 @@ class ActionColors:
 #   - isso daria problema com save/load. Pro pickle funcionar, a classe precisa existir na raiz de algum módulo.
 #       - ai essas coisas que criam classes dinamicamente (dentro de uma função por exemplo) caga o pickle
 #       - pesquisar, talvez dê pra adaptar o save/load do pickle pra funcionar com classes dinamicas assim.
-# TODO: sistema pra user poder criar grafos como quiser, salvar, e reusar eles como um node "Run Graph" anywhere.
-#   - poder fazer isso pra qualquer coisa: hierarquia de widgets, actions ou dados.
-#   - talvez seja mais fácil só reusar o UISystem pra isso: ele suporta tudo e já tem save/load. Ai como faria uma action que roda um system?
-#   - vai ter que atualizar SensorNodes: atualmente só pode existir 1 pra cada sensor-id durante execução e isso poderia dar problema

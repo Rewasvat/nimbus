@@ -296,6 +296,10 @@ def child_region(region_id: str, size: ImVec2 = (0, 0), child_flags: imgui.Child
 # TODO: suportar drag&drop pra mover widgets? simple (ou base) widgets seriam objetos moviveis, enquanto
 #   os "slots" pra filhos nos container widgets seriam os possiveis alvos pra drop.
 # TODO: suportar "temas" somehow? Daria pra ser só os temas da imgui? <ver Elbow>
+#   - melhoria seria versões "LCARS" de coisas básicas como Rect/Button/Label/, aceitando um "tema" pra setar as cores
+#   - outra opção, mais simples, seria um node de "LCARS Theme" que permite selecionar o tema e tem como output as cores relacionadas.
+#     ai vc usa tais cores como data-links pra setar as cores normalmente de Buttons e afins
+#   - na prática, nada impede de implementar ambas soluções acima....
 # ============== LCARS Only: (?)
 # TODO: [widget] Communicator: puramente visual. Mas usa gradiente, não dá pra portar o vetorial facil. Melhor ser imagem.
 # TODO: [widget] MainControls: que me lembro, era uma coleção de vários botões em formatos diferentes.
