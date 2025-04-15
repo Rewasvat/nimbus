@@ -3,14 +3,9 @@ import os
 import sys
 import click
 import traceback
-import nimbus.utils.command_utils as cmd_utils
-import nimbus.utils.utils as utils
-from nimbus.data import DataCache
-
-
-# TODO: Esse set_assets_folder() devia ser automático, em algum módulo do `utils.imgui`... Talvez no AppWindow antes do run()? Ou no __init__?
-from imgui_bundle import hello_imgui  # type: ignore
-hello_imgui.set_assets_folder(os.path.join(os.path.dirname(__file__), "assets"))
+import libasvat.command_utils as cmd_utils
+import libasvat.utils as utils
+from libasvat.data import DataCache
 
 
 # TODO: Refatorar essa classe pra ser parte do Utils, que poderia ser refatorado como uma lib externa.
@@ -26,6 +21,8 @@ class NimbusCommands:
 
     def __init__(self):
         self.command_objects = []
+        data = DataCache()
+        data.set_app_name("nimbus")
         self.load_all_command_groups()
 
     def load_all_command_groups(self):
@@ -34,8 +31,6 @@ class NimbusCommands:
         # define main commands in them.
         ignore_paths = [
             "nimbus",
-            "data",
-            "utils",
         ]
         utils.load_all_modules(os.path.dirname(__file__), "nimbus", ignore_paths=ignore_paths)
         self.command_objects = [cls() for cls in cmd_utils._main_commands]
@@ -71,15 +66,3 @@ main = cmd_utils.DynamicGroup(NimbusCommands(), "nimbus", context_settings={"hel
 # TODO: idealmente essa debug option devia ser definida junto com o on_group_callback lá.
 click.option("-d", "--debug", is_flag=True, help=debug_help)(main)
 click.version_option()(main)
-
-
-if utils.is_frozen():
-    click.secho("Running NIMBUS in standalone executable mode.", fg="green")
-    cmd_line_args = sys.argv[1:]
-    if len(cmd_line_args) <= 0:
-        cmd_line_args = ["monitor", "edit"]
-    try:
-        main(cmd_line_args)
-    except Exception:
-        click.secho(f"{traceback.format_exc()}\nUNHANDLED EXCEPTION / Closing Nimbus.", fg="red")
-        input("Press ENTER to close...")

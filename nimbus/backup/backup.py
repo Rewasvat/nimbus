@@ -3,8 +3,8 @@ import click
 import shutil
 import pickle
 import traceback
-import nimbus.utils.command_utils as cmd_utils
-from nimbus.data import DataCache
+import libasvat.command_utils as cmd_utils
+from libasvat.data import DataCache
 from imgui_bundle import imgui, immapp
 
 

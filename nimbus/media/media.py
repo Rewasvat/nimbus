@@ -1,5 +1,5 @@
 import click
-import nimbus.utils.command_utils as cmd_utils
+import libasvat.command_utils as cmd_utils
 
 
 @cmd_utils.main_command_group
