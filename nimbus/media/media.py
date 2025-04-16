@@ -2,7 +2,7 @@ import click
 import libasvat.command_utils as cmd_utils
 
 
-@cmd_utils.main_command_group
+@cmd_utils.root_command_group
 class MediaManager(metaclass=cmd_utils.Singleton):
     """MEDIA COMMANDS"""
 

@@ -8,7 +8,7 @@ from libasvat.data import DataCache
 from imgui_bundle import imgui, immapp
 
 
-@cmd_utils.main_command_group
+@cmd_utils.root_command_group
 class SystemBackupManager(metaclass=cmd_utils.Singleton):
     """BACKUP COMMANDS"""
 
